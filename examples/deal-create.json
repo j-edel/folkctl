@@ -1,0 +1,9 @@
+{
+  "name": "Project Alpha",
+  "companies": [{ "id": "com_123" }],
+  "people": [{ "id": "per_123" }],
+  "customFieldValues": {
+    "Status": "Active",
+    "Deal value": "42000"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "Acme Inc",
+  "urls": ["https://acme.example"],
+  "groups": [{ "id": "grp_123" }]
+}

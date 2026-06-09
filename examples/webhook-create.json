@@ -1,0 +1,12 @@
+{
+  "name": "My app integration",
+  "targetUrl": "https://example.com/webhook",
+  "subscribedEvents": [
+    {
+      "eventType": "person.created",
+      "filter": {
+        "groupId": "grp_123"
+      }
+    }
+  ]
+}

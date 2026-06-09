@@ -1,0 +1,11 @@
+{
+  "firstName": "Ada",
+  "lastName": "Lovelace",
+  "emails": ["ada@example.com"],
+  "groups": [{ "id": "grp_123" }],
+  "customFieldValues": {
+    "grp_123": {
+      "Status": "Active"
+    }
+  }
+}

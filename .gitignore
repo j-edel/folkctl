@@ -1,0 +1,11 @@
+node_modules/
+npm-debug.log*
+.DS_Store
+coverage/
+dist/
+*.tgz
+*.zip
+.env
+.env.*
+!.env.example
+.clawhub/

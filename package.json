@@ -1,0 +1,49 @@
+{
+  "name": "folkctl",
+  "version": "0.1.0",
+  "description": "Zero-dependency CLI and OpenClaw skill for the folk.app CRM API.",
+  "type": "module",
+  "bin": {
+    "folkctl": "./bin/folkctl.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "docs",
+    "examples",
+    "skills/folk-cli",
+    "README.md",
+    "LICENSE",
+    ".env.example",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "check": "node --check bin/folkctl.js && find src test -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "test": "node --test",
+    "ci": "npm run check && npm test"
+  },
+  "keywords": [
+    "folk",
+    "folk-app",
+    "crm",
+    "cli",
+    "openclaw",
+    "clawhub",
+    "skill"
+  ],
+  "author": "Open source contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/j-edel/folkctl.git"
+  },
+  "bugs": {
+    "url": "https://github.com/j-edel/folkctl/issues"
+  },
+  "homepage": "https://github.com/j-edel/folkctl#readme"
+}
