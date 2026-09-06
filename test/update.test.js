@@ -61,12 +61,27 @@ test('task creation sends the documented body and preserves explicit private vis
   assert.equal(publicTask.body.isPublic, true);
 });
 
-test('invalid task booleans fail before a request, instead of exposing private tasks', async () => {
-  for (const argv of [['tasks', 'create', '--is-public=maybe'], ['tasks', 'list', '--only-assigned-to-me=maybe'], ['tasks', 'create', '--visibility', 'maybe']]) {
-    const result = await run(argv);
-    assert.equal(result.code, 2, result.stderr);
-    assert.equal(result.calls.length, 0);
+test('invalid task booleans fail before a request, instead of exposing private tasks', async (t) => {
+  for (const [command, name] of [
+    [['tasks', 'create', '--entity-id', 'per_1', '--title', 'Follow up'], 'is-public'],
+    [['tasks', 'update', 'tsk_1'], 'is-public'],
+    [['tasks', 'list'], 'only-assigned-to-me'],
+  ]) {
+    for (const value of ['maybe', '', '2', '-']) {
+      for (const flags of [[`--${name}=${value}`], [`--${name}`, value]]) {
+        await t.test(JSON.stringify([...command, ...flags]), async () => {
+          const result = await run([...command, ...flags]);
+          assert.equal(result.code, 2, result.stderr);
+          assert.equal(result.calls.length, 0);
+          assert.equal(result.stdout, '');
+          assert.match(result.stderr, new RegExp(`Invalid --${name}\\. Expected true or false\\.`));
+        });
+      }
+    }
   }
+  const visibility = await run(['tasks', 'create', '--visibility', 'maybe']);
+  assert.equal(visibility.code, 2, visibility.stderr);
+  assert.equal(visibility.calls.length, 0);
 });
 
 test('task operations and completion aliases use the exact documented routes', async () => {

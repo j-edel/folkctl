@@ -83,7 +83,7 @@ export function parseFlagArgs(argv, { aliases = DEFAULT_ALIASES } = {}) {
           throw new CliError(`Missing value for --${name}.`, { exitCode: 2 });
         }
       } else {
-        if (['is-public', 'only-assigned-to-me'].includes(name) && /^(true|false|0|1|yes|no|on|off)$/i.test(next || '')) {
+        if (['is-public', 'only-assigned-to-me'].includes(name) && next !== undefined && (!next.startsWith('-') || next === '-')) {
           addFlag(name, next);
           i += 1;
         } else addFlag(name, true);
