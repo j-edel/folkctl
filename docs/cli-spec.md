@@ -27,13 +27,20 @@ folkctl
 ├── people       list | search | get | create | update | delete
 ├── companies    list | search | get | create | update | delete
 ├── deals        list | search | get | create | update | delete
-├── groups       list | fields
+├── objects      list | search | get | create | update | delete
+├── groups       list | create | update
+│   ├── fields   list | get | create | update
+│   └── members  list | add | update | remove
 ├── users        list | me | get
-├── notes        list | get | create | update | delete
-├── reminders    list | get | create | update | delete
-├── interactions create
-└── webhooks     list | get | create | update | delete
+├── notes        list | search | get | create | update | delete
+├── tasks        list | get | create | update | delete | done | todo
+├── reminders    list | get | create | update | delete (deprecated)
+├── interactions create | past | upcoming | get | update | delete
+├── webhooks     list | get | create | update | delete
+└── mcp          info | config
 ```
+
+`groups fields <groupId> <entityType>` remains shorthand for `groups fields list`. Nested endpoint keys (for example `groups.members.add`) are available through `api docs` and `api spec`. `interactions list` aliases `past`; task completion also accepts `mark-done`/`mark-as-done` and `mark-todo`/`mark-as-todo`.
 
 ## Config precedence
 
@@ -56,6 +63,8 @@ Project-local `.env` and `.env.local` files are also read for `FOLK_API_KEY` and
 
 List endpoints return a payload with `data.items` and `data.pagination.nextLink`. Passing `--all` follows `nextLink` and merges all `items` into the final response.
 
+`groups list --visibility` additionally filters retrieved items locally to handle servers that ignore the announced query parameter. It preserves remaining pagination links, updates merged `itemCount`, and includes `clientFilter` metadata. Use `--all` for complete coverage.
+
 ## Request construction
 
 The CLI always sends:
@@ -67,7 +76,7 @@ X-API-Version: <configured-version>
 User-Agent: folkctl/<version>
 ```
 
-Mutation commands send `Content-Type: application/json` and a JSON body.
+Commands with a body send `Content-Type: application/json`. `tasks todo` posts to `/v1/tasks/{taskId}/mark-as-todo` without a body; `tasks done` posts an explicit `completedAt` timestamp to `/v1/tasks/{taskId}/mark-as-done`.
 
 The resolved request origin must match the configured folk API origin. Absolute
 URLs and pagination links pointing at any other origin are rejected before the
@@ -88,6 +97,12 @@ folkctl people create --data - < person.json
 
 `--field path.to.key=value` applies generic deep assignment on top of `--data`. Resource-specific flags then map to the documented folk request bodies.
 
+Tasks use `title`, `dueAt`, `dueTime`, `description`, `recurrenceFrequency`, `assignedUsers`, `entity`, and `isPublic`. Use the completion commands instead of sending `completedAt` to `tasks update`. `--is-public=false` and `--visibility private` both request a private task; an explicit `--is-public` value takes precedence over `--visibility`.
+
+Interaction `--type` is retained as a flag alias for `activityType`; `--activity-type` takes precedence when both flags are passed. Raw JSON is passed through. Interaction get/delete and both history lists require the `entity.id` query parameter; update requires `entity.id` in the body.
+
+`--entity-id` maps to `filter[entity][in]` on Tasks. Notes use `query`, `createdAfter`, and `createdBefore`, exposed through `--query`, `--created-after`, and `--created-before`. Task text search is not supported.
+
 ## Destructive operations
 
 Delete commands require an interactive confirmation unless one of these is present:
@@ -99,3 +114,11 @@ Delete commands require an interactive confirmation unless one of these is prese
 ```
 
 For non-interactive automation, use `--no-input` to fail instead of prompting.
+
+The same confirmation applies to group member removal and nonempty `removeOptions` in group custom field updates, because removing an option deletes its associated contact data.
+
+## Deprecation and MCP
+
+Reminder wrappers remain on the reminder routes and emit a notice to stderr unless `--quiet` is set. JSON responses preserve the server's `deprecations` array and expose `Deprecation`/`Sunset` headers in `response.deprecation`/`response.sunset`.
+
+MCP helpers run offline without loading REST configuration. `mcp config` writes only a snippet to stdout; `--json` wraps the snippet with format and authentication instructions. The user merges it into their MCP client and authenticates using OAuth. The CLI does not run an MCP server or call MCP tools. See [MCP setup](mcp.md).
