@@ -1,5 +1,16 @@
 # Changelog
 
+## Companion skill 0.2.2 (CLI 0.2.1)
+
+- Pin the ClawHub metadata installer and manual installation command to the patched CLI 0.2.1 source, including task boolean validation.
+- Verify CLI 0.2.1 after installation; keep lifecycle scripts disabled for manual installation.
+
+## 0.2.1
+
+- Reject invalid separated values for task `--is-public` and `--only-assigned-to-me` flags instead of silently treating them as enabled. For example, `--is-public maybe` now fails validation before any request is sent.
+- Preserve bare flags, negated flags, and explicit `true`/`false` values in both separated and equals forms.
+- Include companion skill 0.2.2 with installation pinned to the patched CLI source.
+
 ## Companion skill 0.2.1 (CLI 0.2.0)
 
 - Pin the ClawHub metadata installer and manual installation command to the reviewed v0.2.0 source commit instead of the moving default branch.

@@ -1,6 +1,6 @@
 {
   "name": "folkctl",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Zero-dependency CLI and OpenClaw skill for the folk.app CRM API.",
   "type": "module",
   "bin": {
