@@ -227,4 +227,4 @@ For ClawHub publication, use the existing `folk-cli` slug and the release proced
 
 ## Repository status
 
-`folkctl` 0.2.0 targets the public API documented on September 6, 2026. The offline suite checks all 57 public OpenAPI operations against an independent endpoint snapshot, plus CLI request construction, payloads, pagination, confirmations, configuration, and MCP snippets. These tests do not mutate a live workspace. See [API source notes](docs/folk-api-notes.md) for contract details and documentation discrepancies.
+`folkctl` 0.2.1 targets the public API documented on September 6, 2026. The offline suite checks all 57 public OpenAPI operations against an independent endpoint snapshot, plus CLI request construction, payloads, pagination, confirmations, configuration, and MCP snippets. These tests do not mutate a live workspace. See [API source notes](docs/folk-api-notes.md) for contract details and documentation discrepancies.

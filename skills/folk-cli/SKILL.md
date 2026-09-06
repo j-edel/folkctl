@@ -1,9 +1,9 @@
 ---
 name: folk-cli
 description: Use folkctl to inspect and update folk.app CRM data through its REST API. Covers people, companies, groups, members, custom fields, deals, custom objects, users, notes, tasks, interactions, legacy reminders, webhooks, and official MCP setup.
-version: 0.2.1
+version: 0.2.2
 license: MIT-0
-metadata: {"openclaw":{"requires":{"env":["FOLK_API_KEY"],"bins":["node","folkctl"]},"install":[{"kind":"node","package":"github:j-edel/folkctl#1f981dcdea7a6422f0c7fe67085ef75f4fdd3e55","bins":["folkctl"]}],"primaryEnv":"FOLK_API_KEY","envVars":[{"name":"FOLK_API_KEY","required":true,"description":"folk API key used as an Authorization Bearer token."},{"name":"FOLK_API_VERSION","required":false,"description":"Optional folk API version date for X-API-Version."},{"name":"FOLK_API_BASE_URL","required":false,"description":"Optional API base URL override. Defaults to https://api.folk.app."}],"emoji":"👥","homepage":"https://github.com/j-edel/folkctl"}}
+metadata: {"openclaw":{"requires":{"env":["FOLK_API_KEY"],"bins":["node","folkctl"]},"install":[{"kind":"node","package":"github:j-edel/folkctl#4a9c2af28427432beee018561f5f43e3ecfc2645","bins":["folkctl"]}],"primaryEnv":"FOLK_API_KEY","envVars":[{"name":"FOLK_API_KEY","required":true,"description":"folk API key used as an Authorization Bearer token."},{"name":"FOLK_API_VERSION","required":false,"description":"Optional folk API version date for X-API-Version."},{"name":"FOLK_API_BASE_URL","required":false,"description":"Optional API base URL override. Defaults to https://api.folk.app."}],"emoji":"👥","homepage":"https://github.com/j-edel/folkctl"}}
 ---
 
 # folk CLI skill
@@ -172,11 +172,11 @@ If the API returns 401/403, tell the user to verify or rotate `FOLK_API_KEY`. Do
 
 ## Installation hint
 
-Skill 0.2.1 targets CLI 0.2.0. If `folkctl` is missing, install the exact source commit reviewed in [PR #1](https://github.com/j-edel/folkctl/pull/1) and released as [v0.2.0](https://github.com/j-edel/folkctl/releases/tag/v0.2.0):
+Skill 0.2.2 targets CLI 0.2.1. If `folkctl` is missing, install the immutable CLI source used in [v0.2.1](https://github.com/j-edel/folkctl/releases/tag/v0.2.1), including the task boolean validation fix:
 
 ```bash
-npm install -g --ignore-scripts github:j-edel/folkctl#1f981dcdea7a6422f0c7fe67085ef75f4fdd3e55
+npm install -g --ignore-scripts github:j-edel/folkctl#4a9c2af28427432beee018561f5f43e3ecfc2645
 folkctl --version
 ```
 
-The expected CLI version is `0.2.0`. The commit pin fixes the installed source even if the default branch or release tag changes. This release has no runtime dependencies or installation lifecycle scripts. Complete installation and check the version before making `FOLK_API_KEY` available to the CLI.
+The expected CLI version is `0.2.1`. The commit pin fixes the installed source even if the default branch or release tag changes. Its CLI source and package metadata match the release tag; the tag also includes this updated companion skill. This release has no runtime dependencies or installation lifecycle scripts. Complete installation and check the version before making `FOLK_API_KEY` available to the CLI.

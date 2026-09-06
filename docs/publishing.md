@@ -1,6 +1,6 @@
 # Publishing a folkctl update
 
-Repository: [j-edel/folkctl](https://github.com/j-edel/folkctl). The CLI and bundled `folk-cli` skill share a major/minor feature release. Skill-only corrections may increment the skill's patch version independently; skill 0.2.1 targets CLI 0.2.0.
+Repository: [j-edel/folkctl](https://github.com/j-edel/folkctl). The CLI and bundled `folk-cli` skill share a major/minor feature release. Skill-only corrections may increment the skill's patch version independently; skill 0.2.2 targets CLI 0.2.1.
 
 ## Prepare and verify
 
@@ -21,14 +21,14 @@ node bin/folkctl.js mcp config codex
 
 ## Release after review
 
-After the change is reviewed and merged, verify the final checkout and CI result before tagging. For 0.2.0:
+After the change is reviewed and merged, verify the final checkout and CI result before tagging. For 0.2.1:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
-Use the 0.2.0 changelog entry for GitHub release notes and attach the tested tarball. Verify the GitHub release and installation from its tag.
+Use the 0.2.1 changelog entry for GitHub release notes and attach the tested tarball. Verify the GitHub release and installation from its tag, including rejection of invalid task boolean values.
 
 The public npm registry returned 404 for `folkctl` on September 6, 2026, so npm publication is an optional first publication, not an existing distribution channel. Verify the package name and maintainer account before publishing from the release checkout:
 
@@ -36,11 +36,11 @@ The public npm registry returned 404 for `folkctl` on September 6, 2026, so npm 
 npm publish --access public
 ```
 
-If publishing to npm, verify installation with `npm install -g folkctl@0.2.0` and `folkctl --version`. Package publication, a GitHub release, and a ClawHub skill release are separate steps; verify each destination before reporting it published.
+If publishing to npm, verify installation with `npm install -g folkctl@0.2.1` and `folkctl --version`. Package publication, a GitHub release, and a ClawHub skill release are separate steps; verify each destination before reporting it published.
 
 ## ClawHub companion skill
 
-Use the installed ClawHub CLI's `--help` to confirm its current publish syntax. The release target is the existing `folk-cli` slug and the source is `skills/folk-cli`. Pin both the metadata installer and the manual installation command to the full Git commit SHA of the reviewed CLI release. Verify installation of that exact commit before publishing the skill. Authenticate with the maintainer account and publish the skill's release notes after review.
+Use the installed ClawHub CLI's `--help` to confirm its current publish syntax. The release target is the existing `folk-cli` slug and the source is `skills/folk-cli`. Pin both the metadata installer and the manual installation command to the full Git commit SHA of the reviewed CLI source. When preparing both releases together, commit the CLI version update before the skill pin, then verify that `bin/`, `src/`, `package.json`, and `package-lock.json` are identical between the pinned commit and final release tag. Include the pinned commit in the reviewed branch and preserve it when merging. This lets the bundled skill select the patched CLI without requiring a self-referential commit hash. Verify installation of that exact commit before publishing the skill. Authenticate with the maintainer account and publish the skill's release notes after review.
 
 Verify the owner, latest version, published file checksum, and security result after publication. ClawHub may serve cached metadata or leave a security review pending briefly; an accepted upload does not prove those checks have finished.
 
