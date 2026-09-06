@@ -1,0 +1,358 @@
+{
+  "source": "https://developer.folk.app/schemas/2025-06-09.json",
+  "retrievedAt": "2026-09-06",
+  "apiVersion": "2025-06-09",
+  "sourceSha256": "be8f06113f43c238bdfcb58a4f16bf901ca13a008c106832249b39b002a4434f",
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/v1/people",
+      "operationId": "listPeople",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/people",
+      "operationId": "createPerson",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/people/{personId}",
+      "operationId": "getPerson",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/people/{personId}",
+      "operationId": "updatePerson",
+      "requiredQuery": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/people/{personId}",
+      "operationId": "deletePerson",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies",
+      "operationId": "listCompanies",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/companies",
+      "operationId": "createCompany",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{companyId}",
+      "operationId": "getCompany",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/companies/{companyId}",
+      "operationId": "updateCompany",
+      "requiredQuery": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/companies/{companyId}",
+      "operationId": "deleteCompany",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups/{groupId}/members",
+      "operationId": "listGroupMembers",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups/{groupId}/members",
+      "operationId": "addGroupMember",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/groups/{groupId}/members/{userId}",
+      "operationId": "updateGroupMember",
+      "requiredQuery": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/groups/{groupId}/members/{userId}",
+      "operationId": "removeGroupMember",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups/{groupId}/custom-fields/{entityType}",
+      "operationId": "listGroupCustomFields",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups/{groupId}/custom-fields/{entityType}",
+      "operationId": "createGroupCustomField",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups/{groupId}/custom-fields/{entityType}/{customFieldName}",
+      "operationId": "getGroupCustomField",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/groups/{groupId}/custom-fields/{entityType}/{customFieldName}",
+      "operationId": "updateGroupCustomField",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups/{groupId}/{objectType}",
+      "operationId": "listDeals",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups/{groupId}/{objectType}",
+      "operationId": "createDeal",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups/{groupId}/{objectType}/{objectId}",
+      "operationId": "getDeal",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/groups/{groupId}/{objectType}/{objectId}",
+      "operationId": "updateDeal",
+      "requiredQuery": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/groups/{groupId}/{objectType}/{objectId}",
+      "operationId": "deleteDeal",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups",
+      "operationId": "listGroups",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups",
+      "operationId": "createGroup",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/groups/{groupId}",
+      "operationId": "updateGroup",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/users",
+      "operationId": "listUsers",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/users/me",
+      "operationId": "getCurrentUser",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/users/{userId}",
+      "operationId": "getUser",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/notes",
+      "operationId": "listNotes",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/notes",
+      "operationId": "createNote",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/notes/{noteId}",
+      "operationId": "getNote",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/notes/{noteId}",
+      "operationId": "updateNote",
+      "requiredQuery": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/notes/{noteId}",
+      "operationId": "deleteNote",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/reminders",
+      "operationId": "listReminders",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/reminders",
+      "operationId": "createReminder",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/reminders/{reminderId}",
+      "operationId": "getReminder",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/reminders/{reminderId}",
+      "operationId": "updateReminder",
+      "requiredQuery": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/reminders/{reminderId}",
+      "operationId": "deleteReminder",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks",
+      "operationId": "listTasks",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks",
+      "operationId": "createTask",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/tasks/{taskId}",
+      "operationId": "getTask",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/tasks/{taskId}",
+      "operationId": "updateTask",
+      "requiredQuery": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/tasks/{taskId}",
+      "operationId": "deleteTask",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/{taskId}/mark-as-done",
+      "operationId": "markAsDone",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/tasks/{taskId}/mark-as-todo",
+      "operationId": "markAsTodo",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/interactions",
+      "operationId": "createInteraction",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/interactions/past",
+      "operationId": "listPastInteractions",
+      "requiredQuery": [
+        "entity.id"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/interactions/upcoming",
+      "operationId": "listUpcomingInteractions",
+      "requiredQuery": [
+        "entity.id"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/interactions/{interactionId}",
+      "operationId": "getInteraction",
+      "requiredQuery": [
+        "entity.id"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/interactions/{interactionId}",
+      "operationId": "updateInteraction",
+      "requiredQuery": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/interactions/{interactionId}",
+      "operationId": "deleteInteraction",
+      "requiredQuery": [
+        "entity.id"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/webhooks",
+      "operationId": "listWebhooks",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/webhooks",
+      "operationId": "createWebhook",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/webhooks/{webhookId}",
+      "operationId": "getWebhook",
+      "requiredQuery": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/webhooks/{webhookId}",
+      "operationId": "updateWebhook",
+      "requiredQuery": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/webhooks/{webhookId}",
+      "operationId": "deleteWebhook",
+      "requiredQuery": []
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { CliError } from './errors.js';
-import { flagString, flagValues } from './args.js';
-import { coerceJsonish, parseAssignment, setDeep } from './util.js';
+import { flagString, flagValues, flagBooleanStrict } from './args.js';
+import { parseAssignment, setDeep } from './util.js';
 
 export async function readStdinText(stdin) {
   if (!stdin) return '';
@@ -53,6 +53,7 @@ export async function buildPersonBody(flags, stdin) {
     description: 'description',
     birthday: 'birthday',
     'job-title': 'jobTitle',
+    gender: 'gender',
   });
   copyArrayFlags(body, flags, { email: 'emails', phone: 'phones', address: 'addresses', url: 'urls' });
   addGroups(body, flags);
@@ -110,12 +111,45 @@ export async function buildReminderBody(flags, stdin) {
   if (typeof body.recurrenceRule === 'string') body.recurrenceRule = body.recurrenceRule.replace(/\\n/g, '\n');
   const entityId = flagString(flags, 'entity-id');
   if (entityId) body.entity = { ...(body.entity || {}), id: entityId };
-  const assignedUsers = [];
-  for (const id of flagValues(flags, 'assigned-user-id')) assignedUsers.push({ id: String(id) });
-  for (const email of flagValues(flags, 'assigned-user-email')) assignedUsers.push({ email: String(email) });
-  for (const id of flagValues(flags, 'assignee-id')) assignedUsers.push({ id: String(id) });
-  for (const email of flagValues(flags, 'assignee-email')) assignedUsers.push({ email: String(email) });
-  if (assignedUsers.length) body.assignedUsers = [...(Array.isArray(body.assignedUsers) ? body.assignedUsers : []), ...assignedUsers];
+  addAssignedUsers(body, flags);
+  return body;
+}
+
+export async function buildTaskBody(flags, stdin) {
+  const body = await buildGenericBody(flags, stdin);
+  copyStringFlags(body, flags, {
+    title: 'title',
+    description: 'description',
+    'due-at': 'dueAt',
+    'due-time': 'dueTime',
+    'recurrence-frequency': 'recurrenceFrequency',
+    'completed-at': 'completedAt',
+  });
+  for (const field of ['dueTime', 'recurrenceFrequency']) {
+    if (body[field] === 'null') body[field] = null;
+  }
+  const entityId = flagString(flags, 'entity-id');
+  if (entityId) body.entity = { ...(body.entity || {}), id: entityId };
+  const visibility = flagString(flags, 'visibility');
+  if (visibility !== undefined) {
+    if (!['public', 'private'].includes(visibility)) throw new CliError('Task --visibility must be public or private.', { exitCode: 2 });
+    body.isPublic = visibility === 'public';
+  }
+  const isPublic = flagBooleanStrict(flags, 'is-public');
+  if (isPublic !== undefined) body.isPublic = isPublic;
+  addAssignedUsers(body, flags);
+  return body;
+}
+
+export async function buildGroupBody(flags, stdin) {
+  const body = await buildGenericBody(flags, stdin);
+  copyStringFlags(body, flags, { name: 'name', visibility: 'visibility' });
+  return body;
+}
+
+export async function buildGroupFieldBody(flags, stdin) {
+  const body = await buildGenericBody(flags, stdin);
+  copyStringFlags(body, flags, { name: 'name', type: 'type' });
   return body;
 }
 
@@ -134,9 +168,11 @@ export async function buildWebhookBody(flags, stdin) {
 
 export async function buildInteractionBody(flags, stdin) {
   const body = await buildGenericBody(flags, stdin);
+  // The legacy type flag remains usable, including on the new PATCH endpoint.
   copyStringFlags(body, flags, {
     title: 'title',
-    type: 'type',
+    type: 'activityType',
+    'activity-type': 'activityType',
     content: 'content',
     'date-time': 'dateTime',
     datetime: 'dateTime',
@@ -145,6 +181,13 @@ export async function buildInteractionBody(flags, stdin) {
   const entityId = flagString(flags, 'entity-id');
   if (entityId) body.entity = { ...(body.entity || {}), id: entityId };
   return body;
+}
+
+function addAssignedUsers(body, flags) {
+  const assignedUsers = [];
+  for (const id of flagValues(flags, 'assigned-user-id').concat(flagValues(flags, 'assignee-id'))) assignedUsers.push({ id: String(id) });
+  for (const email of flagValues(flags, 'assigned-user-email').concat(flagValues(flags, 'assignee-email'))) assignedUsers.push({ email: String(email) });
+  if (assignedUsers.length) body.assignedUsers = [...(Array.isArray(body.assignedUsers) ? body.assignedUsers : []), ...assignedUsers];
 }
 
 function copyStringFlags(body, flags, mapping) {

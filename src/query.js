@@ -1,5 +1,5 @@
 import { CliError } from './errors.js';
-import { flagInteger, flagString, flagValues, flagBoolean } from './args.js';
+import { flagInteger, flagString, flagValues, flagBoolean, flagBooleanStrict } from './args.js';
 
 const OPERATOR_ALIASES = new Map([
   ['is', 'in'],
@@ -11,7 +11,7 @@ const REFERENCE_KEYS = new Set(['id', 'email']);
 const REFERENCE_OPERATORS = new Set(['all', 'in', 'not_in']);
 const IMPLICIT_REFERENCE_FIELDS = new Set(['groups', 'companies', 'people', 'createdBy']);
 
-export function buildQuery(flags = {}) {
+export function buildQuery(flags = {}, { resource } = {}) {
   const query = new URLSearchParams();
   const limit = flagInteger(flags, 'limit');
   const cursor = flagString(flags, 'cursor');
@@ -29,8 +29,22 @@ export function buildQuery(flags = {}) {
   for (const raw of flagValues(flags, 'empty')) addFilter(query, `${raw}:empty`);
   for (const raw of flagValues(flags, 'not-empty')) addFilter(query, `${raw}:not_empty`);
 
-  const entityId = flagString(flags, 'entity-id');
-  if (entityId) query.set('entity.id', entityId);
+  if (resource === 'tasks') {
+    for (const entityId of flagValues(flags, 'entity-id')) query.append('filter[entity][in]', String(entityId));
+    const onlyAssignedToMe = flagBooleanStrict(flags, 'only-assigned-to-me');
+    if (onlyAssignedToMe !== undefined) query.set('onlyAssignedToMe', String(onlyAssignedToMe));
+  } else {
+    const entityId = flagString(flags, 'entity-id');
+    if (entityId) query.set('entity.id', entityId);
+  }
+
+  const mapping = resource === 'notes'
+    ? { query: 'query', 'created-after': 'createdAfter', 'created-before': 'createdBefore' }
+    : resource === 'groups' ? { visibility: 'visibility' } : {};
+  for (const [flag, parameter] of Object.entries(mapping)) {
+    const value = flagString(flags, flag);
+    if (value !== undefined) query.set(parameter, value);
+  }
 
   return query;
 }
@@ -90,6 +104,10 @@ export function queryForSearch(resource, terms) {
   const term = terms.join(' ').trim();
   if (!term) throw new CliError(`${resource} search requires a search term.`, { exitCode: 2 });
   query.set('limit', '20');
+  if (resource === 'notes') {
+    query.set('query', term);
+    return query;
+  }
   query.set('combinator', 'or');
   if (resource === 'people') {
     query.append('filter[fullName][like]', term);

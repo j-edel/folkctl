@@ -1,6 +1,7 @@
 import { CliError, FolkApiError } from './errors.js';
 import { flagBoolean, flagInteger, hasFlag } from './args.js';
 import { redact, stripTrailingSlash } from './util.js';
+import { VERSION } from './version.js';
 
 const DEFAULT_RETRIES = 3;
 
@@ -22,7 +23,7 @@ export function makeHeaders(config, { hasBody = false } = {}) {
   const headers = {
     Authorization: `Bearer ${config.apiKey}`,
     Accept: 'application/json',
-    'User-Agent': `folkctl/${config.version || '0.1.0'}`,
+    'User-Agent': `folkctl/${config.version || VERSION}`,
   };
   if (config.apiVersion) headers['X-API-Version'] = config.apiVersion;
   if (hasBody) headers['Content-Type'] = 'application/json';
@@ -221,6 +222,8 @@ function responseMeta(response) {
     status: response.status,
     statusText: response.statusText,
     requestId: response.headers?.get?.('x-request-id') || undefined,
+    deprecation: response.headers?.get?.('deprecation') || undefined,
+    sunset: response.headers?.get?.('sunset') || undefined,
     rateLimit: {
       limit: response.headers?.get?.('x-ratelimit-limit') || undefined,
       remaining: response.headers?.get?.('x-ratelimit-remaining') || undefined,

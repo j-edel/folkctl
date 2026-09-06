@@ -1,0 +1,8 @@
+{
+  "name": "Stage",
+  "type": "singleSelect",
+  "options": [
+    { "label": "Lead", "color": "#5738ff" },
+    { "label": "Qualified", "color": "#20cea9" }
+  ]
+}

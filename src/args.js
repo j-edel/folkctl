@@ -17,6 +17,8 @@ const BOOLEAN_FLAGS = new Set([
   'force',
   'help',
   'json',
+  'is-public',
+  'only-assigned-to-me',
   'or',
   'ndjson',
   'no-color',
@@ -81,7 +83,10 @@ export function parseFlagArgs(argv, { aliases = DEFAULT_ALIASES } = {}) {
           throw new CliError(`Missing value for --${name}.`, { exitCode: 2 });
         }
       } else {
-        addFlag(name, true);
+        if (['is-public', 'only-assigned-to-me'].includes(name) && /^(true|false|0|1|yes|no|on|off)$/i.test(next || '')) {
+          addFlag(name, next);
+          i += 1;
+        } else addFlag(name, true);
       }
       continue;
     }
@@ -128,6 +133,17 @@ export function flagBoolean(flags, name, fallback = false) {
   const value = getFlag(flags, name, fallback);
   if (Array.isArray(value)) return coerceBoolean(value.at(-1), fallback);
   return coerceBoolean(value, fallback);
+}
+
+export function flagBooleanStrict(flags, name) {
+  const raw = getFlag(flags, name);
+  const value = Array.isArray(raw) ? raw.at(-1) : raw;
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (['true', '1', 'yes', 'on', 'false', '0', 'no', 'off'].includes(String(value).trim().toLowerCase())) {
+    return coerceBoolean(value, false);
+  }
+  throw new CliError(`Invalid --${name}. Expected true or false.`, { exitCode: 2 });
 }
 
 export function flagInteger(flags, name, fallback = undefined) {

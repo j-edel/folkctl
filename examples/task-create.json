@@ -1,0 +1,8 @@
+{
+  "entity": { "id": "per_123" },
+  "title": "Follow up on the proposal",
+  "dueAt": "2026-09-08",
+  "dueTime": "09:00",
+  "description": "Review the open questions before the call.",
+  "isPublic": false
+}
