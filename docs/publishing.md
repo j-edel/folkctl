@@ -1,10 +1,10 @@
 # Publishing a folkctl update
 
-Repository: [j-edel/folkctl](https://github.com/j-edel/folkctl). The CLI and bundled `folk-cli` skill should use the same release version.
+Repository: [j-edel/folkctl](https://github.com/j-edel/folkctl). The CLI and bundled `folk-cli` skill share a major/minor feature release. Skill-only corrections may increment the skill's patch version independently; skill 0.2.1 targets CLI 0.2.0.
 
 ## Prepare and verify
 
-1. Update `package.json`, `package-lock.json`, and the `version` in `skills/folk-cli/SKILL.md`. CLI version output and the HTTP User-Agent read `package.json` automatically.
+1. For CLI releases, update `package.json` and `package-lock.json`. For skill releases, update the `version` in `skills/folk-cli/SKILL.md` and its documented CLI target. CLI version output and the HTTP User-Agent read `package.json` automatically.
 2. Update `CHANGELOG.md`, examples, API notes, and the source-backed endpoint fixture if the API changed.
 3. Run checks and inspect the package contents:
 
@@ -40,6 +40,8 @@ If publishing to npm, verify installation with `npm install -g folkctl@0.2.0` an
 
 ## ClawHub companion skill
 
-Use the installed ClawHub CLI's `--help` to confirm its current publish syntax. The release target is the existing `folk-cli` slug, the source is `skills/folk-cli`, and its version must match the CLI package. Authenticate with the maintainer account and publish the same release notes after review.
+Use the installed ClawHub CLI's `--help` to confirm its current publish syntax. The release target is the existing `folk-cli` slug and the source is `skills/folk-cli`. Pin both the metadata installer and the manual installation command to the full Git commit SHA of the reviewed CLI release. Verify installation of that exact commit before publishing the skill. Authenticate with the maintainer account and publish the skill's release notes after review.
+
+Verify the owner, latest version, published file checksum, and security result after publication. ClawHub may serve cached metadata or leave a security review pending briefly; an accepted upload does not prove those checks have finished.
 
 MCP setup does not require publishing a second server. `folkctl mcp config` generates snippets for Folk's hosted server; OAuth happens in the user's MCP client.
