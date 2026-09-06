@@ -24,11 +24,18 @@ test('every wrapper matches a published route and declares required query parame
   assert.equal(new Set(ENDPOINTS.map(endpoint => endpoint.key)).size, ENDPOINTS.length);
 });
 
-test('package, lockfile, and companion skill release versions agree', () => {
+test('release metadata agrees and the companion skill pins reviewed source', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
   const skill = readFileSync(new URL('../skills/folk-cli/SKILL.md', import.meta.url), 'utf8');
   assert.equal(lock.version, pkg.version);
   assert.equal(lock.packages[''].version, pkg.version);
-  assert.equal(skill.match(/^version: (.+)$/m)?.[1], pkg.version);
+  const skillVersion = skill.match(/^version: (.+)$/m)?.[1];
+  assert.match(skillVersion, /^\d+\.\d+\.\d+$/);
+  assert.equal(skillVersion.split('.').slice(0, 2).join('.'), pkg.version.split('.').slice(0, 2).join('.'));
+  const metadata = JSON.parse(skill.match(/^metadata: (.+)$/m)?.[1]);
+  const source = metadata.openclaw.install[0].package;
+  assert.match(source, /^github:j-edel\/folkctl#[a-f0-9]{40}$/);
+  assert.ok(skill.includes(`npm install -g --ignore-scripts ${source}`));
+  assert.ok(skill.includes(`The expected CLI version is \`${pkg.version}\``));
 });

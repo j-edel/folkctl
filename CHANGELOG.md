@@ -1,5 +1,10 @@
 # Changelog
 
+## Companion skill 0.2.1 (CLI 0.2.0)
+
+- Pin the ClawHub metadata installer and manual installation command to the reviewed v0.2.0 source commit instead of the moving default branch.
+- Install manually with lifecycle scripts disabled, verify the expected CLI version, and document the separate skill patch version.
+
 ## 0.2.0
 
 - Add Tasks CRUD, entity and assignment filters, recurrence and due-time flags, and explicit done/todo commands using the documented completion endpoints.
