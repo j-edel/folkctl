@@ -218,7 +218,7 @@ async function handleApi(context) {
     const body = ['POST', 'PUT', 'PATCH'].includes(normalizedMethod) || flagString(context.flags, 'data') ? await buildGenericBody(context.flags, context.stdin) : undefined;
     await guardRawRequest(context, normalizedMethod, path, body);
     const result = await requestFolk({ method: normalizedMethod, path, query: buildQuery(context.flags), body, config: context.config, flags: context.flags, fetchImpl: context.fetchImpl, paginate: flagBoolean(context.flags, 'all'), sleep: context.sleep });
-    warnServerDeprecations(context, result);
+    warnDeprecations(context, result);
     writeOutput(result, context);
     return 0;
   }
@@ -824,20 +824,41 @@ function handleMcp(context) {
 async function requestEndpoint(context, key, { params = {}, query, body } = {}) {
   const endpoint = requireEndpoint(key);
   const path = fillPath(endpoint.path, params);
-  if (endpoint.deprecation) warn(context, endpoint.deprecation);
-  const result = await requestFolk({ method: endpoint.method, path, query, body, config: context.config, flags: context.flags, fetchImpl: context.fetchImpl, paginate: endpoint.paginated, sleep: context.sleep });
-  if (!endpoint.deprecation) warnServerDeprecations(context, result);
+  let result;
+  try {
+    result = await requestFolk({ method: endpoint.method, path, query, body, config: context.config, flags: context.flags, fetchImpl: context.fetchImpl, paginate: endpoint.paginated, sleep: context.sleep });
+  } catch (error) {
+    // A deprecated endpoint can fail because Folk removed it, so keep its notice next to the error.
+    if (endpoint.deprecation) warn(context, endpoint.deprecation);
+    throw error;
+  }
+  warnDeprecations(context, result, endpoint);
   return result;
 }
 
-// Folk announces deprecations in the response, so warnings also cover endpoints deprecated after this release.
-function warnServerDeprecations(context, result) {
-  if (!result || result.dryRun) return;
-  const messages = Array.isArray(result.data?.deprecations) ? result.data.deprecations.filter((message) => typeof message === 'string' && message) : [];
-  if (!messages.length && result.response?.deprecation) {
-    messages.push(`Folk marks this endpoint as deprecated${result.response.sunset ? ` (sunset ${result.response.sunset})` : ''}.`);
+// Folk's own notices (the deprecations array, or Deprecation and Sunset headers) take precedence: they also
+// cover endpoints deprecated after this release, and can carry newer dates than the bundled notice, which
+// covers dry-runs and responses without a notice.
+function warnDeprecations(context, result, endpoint) {
+  const live = Boolean(result) && !result.dryRun;
+  const fromFolk = live && Array.isArray(result.data?.deprecations) ? result.data.deprecations.filter((message) => typeof message === 'string' && message) : [];
+  if (fromFolk.length) {
+    for (const message of fromFolk) warn(context, message);
+    return;
   }
-  for (const message of messages) warn(context, message);
+  if (endpoint?.deprecation) {
+    const sunset = live ? headerDate(result.response?.sunset) : undefined;
+    warn(context, sunset && sunset !== endpoint.sunset ? `${endpoint.deprecation} Folk's Sunset header now says ${sunset}.` : endpoint.deprecation);
+    return;
+  }
+  if (live && result.response?.deprecation) {
+    warn(context, `Folk marks this endpoint as deprecated${result.response.sunset ? ` (sunset ${result.response.sunset})` : ''}.`);
+  }
+}
+
+function headerDate(value) {
+  const time = Date.parse(value ?? '');
+  return Number.isFinite(time) ? new Date(time).toISOString().slice(0, 10) : undefined;
 }
 
 function warn(context, message, { prefix = 'Warning: ' } = {}) {

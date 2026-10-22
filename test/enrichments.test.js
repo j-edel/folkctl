@@ -182,8 +182,26 @@ test('server deprecation notices reach stderr once, and --quiet hides them', asy
   assert.equal(quiet.stderr, '');
   const header = await run(['api', 'request', 'GET', '/v1/users/me', '--json'], { fetchImpl: async () => Response.json({ data: {} }, { headers: { Deprecation: 'Sun, 01 Nov 2026 00:00:00 GMT', Sunset: 'Sat, 01 May 2027 00:00:00 GMT' } }) });
   assert.match(header.stderr, /Folk marks this endpoint as deprecated \(sunset Sat, 01 May 2027 00:00:00 GMT\)\./);
-  const reminders = await run(['reminders', 'list', '--json'], { fetchImpl: async () => Response.json({ data: { items: [] }, deprecations: ['Use tasks'] }) });
-  assert.equal(reminders.stderr.trim().split('\n').length, 1, 'reminders warn once, before the request');
+});
+
+test('for endpoints with a bundled notice, Folk\'s own notice wins, and the bundled one covers the rest', async () => {
+  const bundled = 'Warning: Reminders are deprecated. Use tasks instead; Folk lists February 13, 2027 as the sunset date.';
+  const reminders = (fetchImpl) => run(['reminders', 'list', '--json'], { fetchImpl });
+  const fromFolk = await reminders(async () => Response.json({ data: { items: [] }, deprecations: ['Removed on March 1, 2027. Use the Tasks endpoints.'] }, { headers: { Sunset: 'Mon, 01 Mar 2027 00:00:00 GMT' } }));
+  assert.equal(fromFolk.stderr, 'Warning: Removed on March 1, 2027. Use the Tasks endpoints.\n');
+  const silent = await reminders(async () => Response.json({ data: { items: [] } }));
+  assert.equal(silent.stderr, `${bundled}\n`);
+  const sameDate = await reminders(async () => Response.json({ data: { items: [] } }, { headers: { Sunset: 'Sat, 13 Feb 2027 00:00:00 GMT' } }));
+  assert.equal(sameDate.stderr, `${bundled}\n`);
+  const moved = await reminders(async () => Response.json({ data: { items: [] } }, { headers: { Sunset: 'Thu, 11 Feb 2027 00:00:00 GMT' } }));
+  assert.equal(moved.stderr, `${bundled} Folk's Sunset header now says 2027-02-11.\n`);
+  const removed = await reminders(async () => Response.json({ error: { code: 'NOT_FOUND', message: 'Not found' } }, { status: 404 }));
+  assert.equal(removed.code, 1);
+  assert.match(removed.stderr, new RegExp(`^${bundled.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\nfolk API 404 NOT_FOUND`));
+  const pages = await run(['reminders', 'list', '--all', '--ndjson'], {
+    fetchImpl: async (url, init, call) => Response.json({ data: { items: [{ id: `rmd_${call}` }], pagination: { nextLink: call === 1 ? 'https://api.folk.app/v1/reminders?cursor=2' : undefined } }, deprecations: ['Use the Tasks endpoints.'] }),
+  });
+  assert.equal(pages.stderr, 'Warning: Use the Tasks endpoints.\n');
 });
 
 test('company payloads use documented fields, and webhooks accept the enrichment event', async () => {

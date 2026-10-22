@@ -156,6 +156,8 @@ The prompt asks for the record ID, or for the number of records or people affect
 
 ## Deprecation and MCP
 
-Reminder wrappers remain on the reminder routes and emit a notice to stderr unless `--quiet` is set. Interaction history commands use `GET /v1/interactions`; the deprecated `/past` and `/upcoming` keys stay available to `api docs` and `api spec` with their sunset date. For other endpoints, the CLI prints the messages Folk sends in `deprecations`, or a notice for a `Deprecation` header, to stderr. JSON responses preserve the server's `deprecations` array and expose `Deprecation`/`Sunset` headers in `response.deprecation`/`response.sunset`.
+Reminder wrappers remain on the reminder routes and emit a notice to stderr unless `--quiet` is set. Interaction history commands use `GET /v1/interactions`; the deprecated `/past` and `/upcoming` keys stay available to `api docs` and `api spec` with their sunset date.
+
+For every endpoint, including `api request`, the CLI prints the notices Folk sends in `deprecations` to stderr, once each, because they can be newer than this release. Endpoints the CLI already knows are deprecated print their bundled notice instead when Folk sends none, in dry-runs, and when the request fails; if Folk's `Sunset` header gives another date, the notice says so. For other endpoints, a `Deprecation` header without a message prints a generic notice. JSON responses preserve the server's `deprecations` array and expose `Deprecation`/`Sunset` headers in `response.deprecation`/`response.sunset`.
 
 MCP helpers run offline without loading REST configuration. `mcp config` writes only a snippet to stdout; `--json` wraps the snippet with format and authentication instructions. The user merges it into their MCP client and authenticates using OAuth. The CLI does not run an MCP server or call MCP tools. See [MCP setup](mcp.md).
