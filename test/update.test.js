@@ -1,38 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Readable, Writable } from 'node:stream';
-import { fileURLToPath } from 'node:url';
-import { main } from '../src/main.js';
 import { VERSION } from '../src/version.js';
-
-async function run(argv, { fetchImpl, env = {} } = {}) {
-  let stdout = '';
-  let stderr = '';
-  const calls = [];
-  const code = await main({
-    argv: [...argv, '--no-retry'],
-    env: { FOLKCTL_CONFIG: fileURLToPath(new URL('./fixtures/no-config.json', import.meta.url)), FOLK_API_KEY: 'fk_test_secret', ...env },
-    cwd: fileURLToPath(new URL('./fixtures/empty', import.meta.url)),
-    stdin: Readable.from([]),
-    stdout: new Writable({ write(chunk, _encoding, cb) { stdout += chunk; cb(); } }),
-    stderr: new Writable({ write(chunk, _encoding, cb) { stderr += chunk; cb(); } }),
-    fetchImpl: async (url, init) => {
-      calls.push({ url: new URL(url), ...init });
-      assert.ok(fetchImpl, 'Unexpected network request');
-      return fetchImpl(url, init);
-    },
-  });
-  return { code, stdout, stderr, calls };
-}
-
-async function preview(argv) {
-  const result = await run([...argv, '--dry-run', '--json']);
-  assert.equal(result.code, 0, result.stderr);
-  assert.equal(result.calls.length, 0);
-  assert.ok(!result.stdout.includes('fk_test_secret'));
-  const payload = JSON.parse(result.stdout);
-  return { ...payload.request, url: new URL(payload.request.url), stderr: result.stderr };
-}
+import { preview, run } from './helpers.js';
 
 test('tasks use task filters, including repeated entity IDs and explicit assignment booleans', async () => {
   const request = await preview(['tasks', 'list', '--entity-id', 'per_1', '--entity-id', 'per_2', '--only-assigned-to-me', '--empty', 'completedAt', '--filter', 'dueAt:lt:2026-09-30']);
@@ -114,20 +83,50 @@ test('completion requires an explicit timestamp and cannot be changed through ta
 });
 
 test('interaction reads and deletion carry the entity query and the required route', async () => {
-  for (const [action, path, method] of [
-    ['past', '/v1/interactions/past', 'GET'], ['list', '/v1/interactions/past', 'GET'],
-    ['upcoming', '/v1/interactions/upcoming', 'GET'], ['get', '/v1/interactions/lit_1', 'GET'],
-    ['delete', '/v1/interactions/lit_1', 'DELETE'],
+  // past and upcoming moved to GET /v1/interactions?timeframe=..., which replaces the deprecated routes.
+  for (const [action, path, method, timeframe] of [
+    ['past', '/v1/interactions', 'GET', 'past'], ['list', '/v1/interactions', 'GET', 'past'],
+    ['upcoming', '/v1/interactions', 'GET', 'upcoming'], ['get', '/v1/interactions/lit_1', 'GET', null],
+    ['delete', '/v1/interactions/lit_1', 'DELETE', null],
   ]) {
     const args = ['get', 'delete'].includes(action) ? ['lit_1'] : [];
     const request = await preview(['interactions', action, ...args, '--entity-id', 'per_1']);
     assert.equal(request.method, method);
     assert.equal(request.url.pathname, path);
     assert.equal(request.url.searchParams.get('entity.id'), 'per_1');
+    assert.equal(request.url.searchParams.get('timeframe'), timeframe, action);
     assert.equal(request.body, undefined);
+    assert.equal(request.stderr, '', action);
   }
   const raw = await preview(['interactions', 'get', 'lit_1', '--param', 'entity.id=per_1']);
   assert.equal(raw.url.searchParams.get('entity.id'), 'per_1');
+  const upcoming = await preview(['interactions', 'list', '--entity-id', 'per_1', '--timeframe', 'upcoming']);
+  assert.equal(upcoming.url.searchParams.get('timeframe'), 'upcoming');
+});
+
+test('interaction history filters map to repeated importedTypes and user.id parameters', async () => {
+  const filtered = await preview(['interactions', 'past', '--entity-id', 'per_1', '--imported-type', 'email,calendar', '--imported-type', 'call', '--user-id', 'usr_1,usr_2']);
+  assert.deepEqual(filtered.url.searchParams.getAll('importedTypes'), ['email', 'calendar', 'call']);
+  assert.deepEqual(filtered.url.searchParams.getAll('user.id'), ['usr_1', 'usr_2']);
+  const logged = await preview(['interactions', 'list', '--entity-id', 'per_1', '--logged-only']);
+  assert.deepEqual(logged.url.searchParams.getAll('importedTypes'), ['']);
+  assert.match(logged.url.search, /importedTypes=(&|$)/);
+  for (const argv of [
+    ['interactions', 'list', '--entity-id', 'per_1', '--logged-only', '--imported-type', 'email'],
+    ['interactions', 'past', '--entity-id', 'per_1', '--timeframe', 'upcoming'],
+    ['interactions', 'list', '--timeframe', 'past'],
+  ]) {
+    const result = await run(argv);
+    assert.equal(result.code, 2, result.stderr);
+    assert.equal(result.calls.length, 0);
+  }
+  const docs = await run(['api', 'docs', 'interactions.past']);
+  assert.match(docs.stdout, /Deprecated: .*March 29, 2027/);
+  const spec = JSON.parse((await run(['api', 'spec', 'interactions.upcoming'])).stdout).data;
+  assert.equal(spec.sunset, '2027-03-29');
+  assert.equal(spec.replacement, 'interactions.list');
+  const list = JSON.parse((await run(['api', 'spec', 'interactions.list'])).stdout).data;
+  assert.deepEqual(list.requiredQuery, ['entity.id', 'timeframe']);
 });
 
 test('interaction history and editing refuse missing IDs without contacting Folk', async () => {
@@ -372,7 +371,7 @@ test('version output, help, User-Agent, and new resource help stay in sync', asy
   assert.equal(result.stdout.trim(), VERSION);
   const request = await preview(['tasks', 'list']);
   assert.equal(request.headers['User-Agent'], `folkctl/${VERSION}`);
-  for (const resource of ['tasks', 'interactions', 'objects', 'groups', 'mcp']) {
+  for (const resource of ['tasks', 'interactions', 'objects', 'groups', 'mcp', 'enrichments', 'credits', 'people']) {
     const help = await run([resource, '--help']);
     assert.equal(help.code, 0, help.stderr);
     assert.match(help.stdout, new RegExp(`folkctl ${resource}`));

@@ -1,0 +1,4 @@
+{
+  "fields": ["emails", "phones"],
+  "ids": ["per_123", "per_456"]
+}

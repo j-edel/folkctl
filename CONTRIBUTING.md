@@ -22,8 +22,10 @@ node bin/folkctl.js people create --first-name Ada --last-name Lovelace --dry-ru
 
 ## Endpoint updates
 
-1. Add the endpoint to `src/endpoints.js`.
-2. Add a body helper in `src/body.js` only if it improves ergonomics.
-3. Add examples to `README.md` and `skills/folk-cli/SKILL.md`.
-4. Add tests.
-5. Run `npm run ci`.
+1. Regenerate the contract snapshot from Folk's published OpenAPI document and review the diff:
+   `node scripts/openapi-snapshot.mjs > test/fixtures/folk-api-contract.json`
+2. Add the endpoint to `src/endpoints.js`, with `deprecated`, `sunset`, and `beta` markers that match the snapshot.
+3. Add a body helper in `src/body.js` only if it improves ergonomics.
+4. Add examples to `README.md` and `skills/folk-cli/SKILL.md`.
+5. Add tests.
+6. Run `npm run ci`.

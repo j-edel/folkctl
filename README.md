@@ -7,7 +7,7 @@
 - A CLI executable: `folkctl`
 - A ClawHub/OpenClaw skill: `skills/folk-cli/SKILL.md`
 - Unit tests using Node's built-in test runner
-- API endpoint metadata for people, companies, groups, group members, custom fields, deals, custom objects, users, notes, tasks, interactions, webhooks, and legacy reminders
+- API endpoint metadata for people, companies, groups, group members, custom fields, deals, custom objects, users, notes, tasks, interactions, person enrichments, credits, webhooks, and legacy reminders, including batch endpoints
 - Offline setup snippets for Folk's official hosted MCP server
 - Publishing notes for GitHub and ClawHub
 
@@ -134,10 +134,30 @@ folkctl tasks done tsk_123 --completed-at 2026-09-08T14:00:00Z --dry-run
 folkctl tasks todo tsk_123 --dry-run
 folkctl interactions past --entity-id per_123 --all --json
 folkctl interactions upcoming --entity-id per_123 --json
+folkctl interactions list --entity-id per_123 --imported-type email,call --user-id usr_123 --json
+folkctl interactions list --entity-id per_123 --logged-only --json
 folkctl interactions get lit_123 --entity-id per_123 --json
 folkctl interactions create --entity-id per_123 --date-time 2026-09-06T09:00:00.000Z --title "Coffee" --content "Discussed new project." --activity-type coffee --dry-run
 folkctl interactions update lit_123 --entity-id per_123 --content "Updated notes." --dry-run
 folkctl webhooks create --name "My app" --target-url https://example.com/webhook --event person.created
+
+# Batch create, update, or delete up to 100 records per request
+folkctl people batch create --data @examples/people-batch-create.ndjson --group-id grp_123 --dry-run
+folkctl people batch update --data @examples/people-batch-update.json --dry-run
+folkctl companies batch update com_123 com_456 --industry Fintech --dry-run
+folkctl people batch delete per_123 per_456 --dry-run
+folkctl deals batch create --group-id grp_123 --object-type Deals --data @deals.ndjson --dry-run
+
+# Pipe --ndjson output through jq into a batch (100 records per request at most)
+folkctl people list --filter jobTitle:empty --limit 100 --ndjson \
+  | jq -c '{id, jobTitle: "Unknown"}' \
+  | folkctl people batch update --data - --dry-run
+
+# Find missing emails and phones (uses workspace credits)
+folkctl credits
+folkctl people enrich per_123 per_456 --fields emails,phones --wait --dry-run
+folkctl enrichments list --status pending,in_progress
+folkctl enrichments get enr_123 --wait
 
 # Low-level escape hatch for endpoints not yet wrapped
 folkctl api request GET /v1/users/me --json
@@ -153,11 +173,15 @@ folkctl api request POST /v1/people --data '{"firstName":"Ada","lastName":"Lovel
 - `--plain` emits the best identifier/name per item.
 - `--csv` emits a flat CSV projection for list items.
 - `--dry-run` prints the HTTP request and never sends it.
-- `--all` follows `data.pagination.nextLink` and merges `data.items`.
+- `--all` follows `data.pagination.nextLink` and merges `data.items`, pausing when a rate limit window is exhausted.
 - Authorized requests are restricted to the configured folk API origin.
-- Retries are enabled by default only for idempotent read methods; pass `--retries n` to opt into mutation retries.
-- Delete operations, group member removal, and custom field option removal require an interactive confirmation unless `--yes`, `--force`, or `--dry-run` is passed.
+- Every write sends an `Idempotency-Key`, a new UUID unless you pass `--idempotency-key`. Retries reuse it, so a retried write runs once. To retry a command whose outcome is unknown, re-run it with the `idempotencyKey` from its error within 24 hours.
+- Reads retry 429, 500, 502, 503, 504, and network errors. Writes retry 429, 409, 502, 503, 504, and network errors, but not a 500, which Folk stores for the key. `--retries n` sets the count (default 3) and `--no-retry` disables retries.
+- Batch commands write each record on its own. Exit code 5 means Folk accepted the batch but at least one record failed; check each result's `status`.
+- Deletes (including batch deletes), group member removal, custom field option removal, batch updates that replace groups, and enrichments (which spend credits) require an interactive confirmation unless `--yes`, `--force`, or `--dry-run` is passed.
 - Removing custom field options also removes their associated contact data; preview `removeOptions` changes carefully.
+- On people and company updates, `groups` replaces the record's groups and deletes its custom field values in each group left out. Leave `groups` out to keep them; custom fields of groups the record is already in can be set without it. List fields such as `emails` and `phones` also replace the existing values on update.
+- Boolean flags read a following `true`/`false` word as their value, so `--yes false` does not confirm. Use `--flag=value` when in doubt.
 - Secrets are read from `FOLK_API_KEY` or local config; do not pass API keys as command flags.
 
 ## Filtering
@@ -188,7 +212,24 @@ folkctl tasks list --filter assigneeUserId:in:usr_123 --only-assigned-to-me=fals
 
 Task title search is not exposed by the REST API. Use `tasks list` with supported filters. `notes search` uses Folk's full-text `query` parameter.
 
+Enrichment lists filter on `status`, `createdAt`, and `finishedAt`; `--status` is a shortcut for `filter[status][in]`:
+
+```bash
+folkctl enrichments list --status pending,in_progress
+folkctl enrichments list --filter finishedAt:gt:2026-10-01
+```
+
+Select option labels are case-sensitive in filters and writes. Filtering on an unknown label matches nothing, and writing one creates a new option.
+
 `groups list --visibility private --all` filters groups across every retrieved page. The CLI applies the visibility filter locally as well as forwarding it, because the current API can ignore that parameter. Without `--all`, only the current page is filtered and `nextLink` may still point to more results.
+
+## Updating from 0.2.x
+
+- Writes now send an `Idempotency-Key` and retry transient failures with it. Scripts that relied on writes never retrying can pass `--no-retry`.
+- `interactions past`, `upcoming`, and `list` now call `GET /v1/interactions`. Folk removes the old `/past` and `/upcoming` routes on March 29, 2027; output shape is unchanged.
+- Batch deletes, batch updates that set `groups`, and enrichments need `--yes` in non-interactive use.
+- `--foundation-date` now fails: the API has no such field. Use `--foundation-year`.
+- Error output for validation failures now lists each issue's field path.
 
 ## Updating from 0.1.x
 
@@ -227,4 +268,12 @@ For ClawHub publication, use the existing `folk-cli` slug and the release proced
 
 ## Repository status
 
-`folkctl` 0.2.1 targets the public API documented on September 6, 2026. The offline suite checks all 57 public OpenAPI operations against an independent endpoint snapshot, plus CLI request construction, payloads, pagination, confirmations, configuration, and MCP snippets. These tests do not mutate a live workspace. See [API source notes](docs/folk-api-notes.md) for contract details and documentation discrepancies.
+`folkctl` 0.3.0 targets the public API documented on October 22, 2026. The offline suite checks all 71 public OpenAPI operations, and their deprecation and beta markers, against an independent endpoint snapshot, plus CLI request construction, payloads, pagination, batch results, enrichment polling, retries, idempotency keys, rate limits, confirmations, configuration, and MCP snippets. These tests do not mutate a live workspace. See [API source notes](docs/folk-api-notes.md) for contract details and documentation discrepancies.
+
+To check for API changes, regenerate the snapshot and run the tests:
+
+```bash
+node scripts/openapi-snapshot.mjs > test/fixtures/folk-api-contract.json
+git diff test/fixtures/folk-api-contract.json
+npm test
+```

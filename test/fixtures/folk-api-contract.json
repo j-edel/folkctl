@@ -1,8 +1,8 @@
 {
   "source": "https://developer.folk.app/schemas/2025-06-09.json",
-  "retrievedAt": "2026-09-06",
+  "retrievedAt": "2026-10-22",
   "apiVersion": "2025-06-09",
-  "sourceSha256": "be8f06113f43c238bdfcb58a4f16bf901ca13a008c106832249b39b002a4434f",
+  "sourceSha256": "85e1292572fb70edf436a4ac40140f4641f1b815491c4a138488f1e647ef1ae5",
   "operations": [
     {
       "method": "GET",
@@ -35,6 +35,24 @@
       "requiredQuery": []
     },
     {
+      "method": "POST",
+      "path": "/v1/people/batch/create",
+      "operationId": "batchCreatePeople",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/people/batch/update",
+      "operationId": "batchUpdatePeople",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/people/batch/delete",
+      "operationId": "batchDeletePeople",
+      "requiredQuery": []
+    },
+    {
       "method": "GET",
       "path": "/v1/companies",
       "operationId": "listCompanies",
@@ -62,6 +80,30 @@
       "method": "DELETE",
       "path": "/v1/companies/{companyId}",
       "operationId": "deleteCompany",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/companies/batch/create",
+      "operationId": "batchCreateCompanies",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/companies/batch/update",
+      "operationId": "batchUpdateCompanies",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/companies/batch/delete",
+      "operationId": "batchDeleteCompanies",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/credits",
+      "operationId": "getCredits",
       "requiredQuery": []
     },
     {
@@ -143,6 +185,24 @@
       "requiredQuery": []
     },
     {
+      "method": "POST",
+      "path": "/v1/groups/{groupId}/{objectType}/batch/create",
+      "operationId": "batchCreateDeals",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups/{groupId}/{objectType}/batch/update",
+      "operationId": "batchUpdateDeals",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups/{groupId}/{objectType}/batch/delete",
+      "operationId": "batchDeleteDeals",
+      "requiredQuery": []
+    },
+    {
       "method": "GET",
       "path": "/v1/groups",
       "operationId": "listGroups",
@@ -212,31 +272,36 @@
       "method": "GET",
       "path": "/v1/reminders",
       "operationId": "listReminders",
-      "requiredQuery": []
+      "requiredQuery": [],
+      "deprecated": true
     },
     {
       "method": "POST",
       "path": "/v1/reminders",
       "operationId": "createReminder",
-      "requiredQuery": []
+      "requiredQuery": [],
+      "deprecated": true
     },
     {
       "method": "GET",
       "path": "/v1/reminders/{reminderId}",
       "operationId": "getReminder",
-      "requiredQuery": []
+      "requiredQuery": [],
+      "deprecated": true
     },
     {
       "method": "PATCH",
       "path": "/v1/reminders/{reminderId}",
       "operationId": "updateReminder",
-      "requiredQuery": []
+      "requiredQuery": [],
+      "deprecated": true
     },
     {
       "method": "DELETE",
       "path": "/v1/reminders/{reminderId}",
       "operationId": "deleteReminder",
-      "requiredQuery": []
+      "requiredQuery": [],
+      "deprecated": true
     },
     {
       "method": "GET",
@@ -281,6 +346,34 @@
       "requiredQuery": []
     },
     {
+      "method": "GET",
+      "path": "/v1/person-enrichments",
+      "operationId": "listPersonEnrichments",
+      "requiredQuery": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/person-enrichments",
+      "operationId": "createPersonEnrichment",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/person-enrichments/{enrichmentId}",
+      "operationId": "getPersonEnrichment",
+      "requiredQuery": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/interactions",
+      "operationId": "listInteractions",
+      "requiredQuery": [
+        "entity.id",
+        "timeframe"
+      ],
+      "beta": true
+    },
+    {
       "method": "POST",
       "path": "/v1/interactions",
       "operationId": "createInteraction",
@@ -292,7 +385,9 @@
       "operationId": "listPastInteractions",
       "requiredQuery": [
         "entity.id"
-      ]
+      ],
+      "deprecated": true,
+      "beta": true
     },
     {
       "method": "GET",
@@ -300,7 +395,9 @@
       "operationId": "listUpcomingInteractions",
       "requiredQuery": [
         "entity.id"
-      ]
+      ],
+      "deprecated": true,
+      "beta": true
     },
     {
       "method": "GET",
@@ -308,13 +405,15 @@
       "operationId": "getInteraction",
       "requiredQuery": [
         "entity.id"
-      ]
+      ],
+      "beta": true
     },
     {
       "method": "PATCH",
       "path": "/v1/interactions/{interactionId}",
       "operationId": "updateInteraction",
-      "requiredQuery": []
+      "requiredQuery": [],
+      "beta": true
     },
     {
       "method": "DELETE",
@@ -322,7 +421,8 @@
       "operationId": "deleteInteraction",
       "requiredQuery": [
         "entity.id"
-      ]
+      ],
+      "beta": true
     },
     {
       "method": "GET",

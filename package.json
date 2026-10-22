@@ -1,6 +1,6 @@
 {
   "name": "folkctl",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Zero-dependency CLI and OpenClaw skill for the folk.app CRM API.",
   "type": "module",
   "bin": {
@@ -23,7 +23,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "check": "node --check bin/folkctl.js && find src test -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "check": "node --check bin/folkctl.js && find src test scripts -name \"*.js\" -o -name \"*.mjs\" | xargs -n1 node --check",
     "test": "node --test",
     "ci": "npm run check && npm test"
   },

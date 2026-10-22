@@ -4,6 +4,11 @@ export function compactObject(object) {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
 }
 
+// Flattens repeated and comma-separated flag values: ['a,b', 'c'] -> ['a', 'b', 'c'].
+export function splitList(values) {
+  return values.flatMap((value) => String(value).split(',')).map((value) => value.trim()).filter(Boolean);
+}
+
 export function ensureArray(value) {
   if (value === undefined || value === null || value === false) return [];
   return Array.isArray(value) ? value : [value];
@@ -24,9 +29,17 @@ export function coerceJsonish(value) {
   return value;
 }
 
+// Keys that would reach Object.prototype or a constructor instead of the request body.
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+export function assertSafeKey(key, source) {
+  if (UNSAFE_KEYS.has(String(key))) throw new CliError(`Invalid key ${JSON.stringify(String(key))} in ${source}.`, { exitCode: 2 });
+}
+
 export function setDeep(object, dottedKey, value) {
   const path = String(dottedKey).split('.').filter(Boolean);
   if (path.length === 0) throw new CliError(`Invalid empty field path: ${dottedKey}`, { exitCode: 2 });
+  for (const key of path) assertSafeKey(key, `field path ${dottedKey}`);
   let cursor = object;
   for (const key of path.slice(0, -1)) {
     if (cursor[key] === undefined) cursor[key] = {};

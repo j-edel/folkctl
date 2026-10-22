@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import { CliError } from './errors.js';
 import { flagString, flagValues, flagBooleanStrict } from './args.js';
-import { parseAssignment, setDeep } from './util.js';
+import { BATCH_MAX_RECORDS, ENRICHMENT_MAX_PEOPLE } from './endpoints.js';
+import { assertSafeKey, parseAssignment, setDeep, splitList } from './util.js';
 
 export async function readStdinText(stdin) {
   if (!stdin) return '';
@@ -11,16 +12,19 @@ export async function readStdinText(stdin) {
   return data;
 }
 
+async function readInputText(source, stdin) {
+  if (source === '-') return readStdinText(stdin);
+  if (source.startsWith('@')) return fs.readFile(source.slice(1), 'utf8');
+  return source;
+}
+
+function dataSource(flags) {
+  return flagString(flags, 'data') || flagString(flags, 'body') || flagString(flags, 'file');
+}
+
 export async function readJsonInput(source, stdin) {
   if (!source) return undefined;
-  let text;
-  if (source === '-') {
-    text = await readStdinText(stdin);
-  } else if (source.startsWith('@')) {
-    text = await fs.readFile(source.slice(1), 'utf8');
-  } else {
-    text = source;
-  }
+  const text = await readInputText(source, stdin);
   try {
     return JSON.parse(text);
   } catch (error) {
@@ -28,15 +32,16 @@ export async function readJsonInput(source, stdin) {
   }
 }
 
-export async function buildGenericBody(flags, stdin) {
-  let body = {};
-  const dataFlag = flagString(flags, 'data') || flagString(flags, 'body') || flagString(flags, 'file');
-  if (dataFlag) {
-    body = await readJsonInput(dataFlag.startsWith('@') || dataFlag === '-' ? dataFlag : dataFlag, stdin);
-    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
-      throw new CliError('--data must be a JSON object for this command.', { exitCode: 2 });
-    }
-  }
+async function readDataObject(flags, stdin) {
+  const source = dataSource(flags);
+  if (!source) return {};
+  const body = await readJsonInput(source, stdin);
+  if (!isPlainObject(body)) throw new CliError('--data must be a JSON object for this command.', { exitCode: 2 });
+  return body;
+}
+
+// --field path.to.key=value applies generic deep assignment on top of --data.
+export function applyFieldFlags(body, flags) {
   for (const raw of flagValues(flags, 'field')) {
     const [key, value] = parseAssignment(raw, { label: '--field' });
     setDeep(body, key, value);
@@ -44,8 +49,14 @@ export async function buildGenericBody(flags, stdin) {
   return body;
 }
 
-export async function buildPersonBody(flags, stdin) {
-  const body = await buildGenericBody(flags, stdin);
+export async function buildGenericBody(flags, stdin) {
+  return applyFieldFlags(await readDataObject(flags, stdin), flags);
+}
+
+// Each apply*Flags function maps resource flags onto a body. Single-record commands apply them on top of
+// --data; batch commands apply them to every record.
+export function applyPersonFlags(body, flags) {
+  applyFieldFlags(body, flags);
   copyStringFlags(body, flags, {
     'first-name': 'firstName',
     'last-name': 'lastName',
@@ -62,14 +73,20 @@ export async function buildPersonBody(flags, stdin) {
   return body;
 }
 
-export async function buildCompanyBody(flags, stdin) {
-  const body = await buildGenericBody(flags, stdin);
+export async function buildPersonBody(flags, stdin) {
+  return applyPersonFlags(await readDataObject(flags, stdin), flags);
+}
+
+export function applyCompanyFlags(body, flags) {
+  if (flagString(flags, 'foundation-date') !== undefined) {
+    throw new CliError('--foundation-date is not a Folk company field. Use --foundation-year YYYY, or --last-funding-date YYYY-MM-DD for funding.', { exitCode: 2 });
+  }
+  applyFieldFlags(body, flags);
   copyStringFlags(body, flags, {
     name: 'name',
     description: 'description',
     industry: 'industry',
     'employee-range': 'employeeRange',
-    'foundation-date': 'foundationDate',
     'foundation-year': 'foundationYear',
     'funding-raised': 'fundingRaised',
     'last-funding-date': 'lastFundingDate',
@@ -80,8 +97,12 @@ export async function buildCompanyBody(flags, stdin) {
   return body;
 }
 
-export async function buildDealBody(flags, stdin) {
-  const body = await buildGenericBody(flags, stdin);
+export async function buildCompanyBody(flags, stdin) {
+  return applyCompanyFlags(await readDataObject(flags, stdin), flags);
+}
+
+export function applyDealFlags(body, flags) {
+  applyFieldFlags(body, flags);
   copyStringFlags(body, flags, { name: 'name' });
   const companyIds = flagValues(flags, 'company-id');
   const personIds = flagValues(flags, 'person-id');
@@ -89,6 +110,10 @@ export async function buildDealBody(flags, stdin) {
   if (personIds.length) body.people = [...(body.people || []), ...personIds.map((id) => ({ id }))];
   addFlatCustomFields(body, flags);
   return body;
+}
+
+export async function buildDealBody(flags, stdin) {
+  return applyDealFlags(await readDataObject(flags, stdin), flags);
 }
 
 export async function buildNoteBody(flags, stdin) {
@@ -183,6 +208,79 @@ export async function buildInteractionBody(flags, stdin) {
   return body;
 }
 
+// Enrichment bodies are {fields, ids}. IDs come from --data ids, --id, and positional arguments.
+export async function buildEnrichmentBody(flags, stdin, ids = []) {
+  const body = await buildGenericBody(flags, stdin);
+  const fields = splitList(flagValues(flags, 'fields')).map(normalizeEnrichmentField);
+  if (fields.length) body.fields = [...(Array.isArray(body.fields) ? body.fields : []), ...fields];
+  if (Array.isArray(body.fields)) body.fields = [...new Set(body.fields)];
+  const allIds = [...(Array.isArray(body.ids) ? body.ids : []).map(String), ...splitList(flagValues(flags, 'id')), ...splitList(ids)];
+  // Folk enriches duplicate IDs once; removing them here keeps them from counting toward the limit.
+  if (allIds.length) body.ids = [...new Set(allIds)];
+  if (!Array.isArray(body.fields) || !body.fields.length) {
+    throw new CliError('Enrichment requires --fields emails, phones, or emails,phones.', { exitCode: 2 });
+  }
+  if (!Array.isArray(body.ids) || !body.ids.length) {
+    throw new CliError('Enrichment requires at least one person ID, as arguments, --id, or ids in --data.', { exitCode: 2 });
+  }
+  if (body.ids.length > ENRICHMENT_MAX_PEOPLE) {
+    throw new CliError(`An enrichment accepts at most ${ENRICHMENT_MAX_PEOPLE} people; got ${body.ids.length}. Split the IDs into several enrichments.`, { exitCode: 2 });
+  }
+  return body;
+}
+
+function normalizeEnrichmentField(field) {
+  const value = String(field).toLowerCase();
+  if (value === 'email') return 'emails';
+  if (value === 'phone') return 'phones';
+  return value;
+}
+
+// Batch input: a JSON array of records, an object with a records array, a single record object, or NDJSON
+// (one record per line, as printed by --ndjson). Delete batches also accept a JSON array of ID strings.
+export async function readBatchRecords(flags, stdin) {
+  const source = dataSource(flags);
+  if (!source) return { records: [], shape: 'none' };
+  const text = await readInputText(source, stdin);
+  if (!String(text).trim()) return { records: [], shape: 'empty' };
+  const parsed = parseJsonOrNdjson(text);
+  if (Array.isArray(parsed.value)) return { records: parsed.value, shape: parsed.ndjson ? 'ndjson' : 'array' };
+  if (isPlainObject(parsed.value) && Array.isArray(parsed.value.records)) return { records: parsed.value.records, shape: 'records' };
+  if (isPlainObject(parsed.value)) return { records: [parsed.value], shape: 'object' };
+  throw new CliError('--data must be a JSON array of records, an object with a records array, or NDJSON.', { exitCode: 2 });
+}
+
+function parseJsonOrNdjson(text) {
+  try {
+    return { value: JSON.parse(text) };
+  } catch (error) {
+    const lines = String(text).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (lines.length > 1) {
+      try {
+        return { value: lines.map((line) => JSON.parse(line)), ndjson: true };
+      } catch {
+        // Report the original JSON error below.
+      }
+    }
+    throw new CliError(`Invalid JSON or NDJSON supplied to --data: ${error.message}`, { exitCode: 2, cause: error });
+  }
+}
+
+export function validateBatchRecords(records, { label, requireId }) {
+  if (!records.length) throw new CliError(`${label} needs at least one record. Pass records with --data${requireId ? ' or record IDs as arguments' : ''}.`, { exitCode: 2 });
+  if (records.length > BATCH_MAX_RECORDS) {
+    throw new CliError(`A batch accepts at most ${BATCH_MAX_RECORDS} records; got ${records.length}. Split the input into several commands, for example with split -l ${BATCH_MAX_RECORDS} on NDJSON.`, { exitCode: 2 });
+  }
+  records.forEach((record, index) => {
+    if (!isPlainObject(record)) throw new CliError(`records[${index}] must be a JSON object.`, { exitCode: 2 });
+    if (requireId && (typeof record.id !== 'string' || !record.id)) throw new CliError(`records[${index}] needs a string id for ${label}.`, { exitCode: 2 });
+  });
+}
+
+export function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 function addAssignedUsers(body, flags) {
   const assignedUsers = [];
   for (const id of flagValues(flags, 'assigned-user-id').concat(flagValues(flags, 'assignee-id'))) assignedUsers.push({ id: String(id) });
@@ -227,6 +325,8 @@ function addGroupedCustomFields(body, flags) {
     const groupId = left.slice(0, dot);
     const fieldName = left.slice(dot + 1);
     if (!groupId || !fieldName) throw new CliError(`Invalid --custom ${JSON.stringify(raw)}. Expected groupId.Field Name=value.`, { exitCode: 2 });
+    assertSafeKey(groupId, '--custom');
+    assertSafeKey(fieldName, '--custom');
     body.customFieldValues[groupId] = body.customFieldValues[groupId] || {};
     body.customFieldValues[groupId][fieldName] = value;
   }
@@ -238,6 +338,7 @@ function addFlatCustomFields(body, flags) {
   body.customFieldValues = body.customFieldValues && typeof body.customFieldValues === 'object' ? body.customFieldValues : {};
   for (const raw of entries) {
     const [fieldName, value] = parseAssignment(raw, { label: '--custom' });
+    assertSafeKey(fieldName, '--custom');
     body.customFieldValues[fieldName] = value;
   }
 }

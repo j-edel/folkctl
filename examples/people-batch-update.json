@@ -1,0 +1,6 @@
+{
+  "records": [
+    { "id": "per_123", "jobTitle": "Analyst" },
+    { "id": "per_456", "customFieldValues": { "grp_123": { "Status": "Qualified" } } }
+  ]
+}

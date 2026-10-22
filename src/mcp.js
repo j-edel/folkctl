@@ -8,7 +8,19 @@ export const MCP_INFO = {
   docsUrl: 'https://developer.folk.app/mcp/overview',
   connectUrl: 'https://developer.folk.app/mcp/connect',
   toolsUrl: 'https://developer.folk.app/mcp/tools',
-  capabilities: ['People and companies', 'Custom objects', 'Note search', 'Groups, members and custom fields', 'Past and upcoming interactions', 'Tasks and completion'],
+  capabilities: [
+    'People and companies, with bulk create and update of up to 100 records per call',
+    'Custom objects, with bulk create and update',
+    'Note search',
+    'Groups, members and custom fields',
+    'Interaction history (folk_list_interactions)',
+    'Tasks and completion',
+    'Person enrichments and credits',
+  ],
+  notes: [
+    'Records cannot be deleted through the MCP.',
+    'Single-record create and update tools for people, companies and objects are deprecated in favor of the bulk tools and will be removed on April 16, 2027.',
+  ],
   cli: 'folkctl mcp config prints setup snippets. It does not run an MCP server, call MCP tools, or authenticate a client.',
 };
 

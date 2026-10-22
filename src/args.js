@@ -18,6 +18,7 @@ const BOOLEAN_FLAGS = new Set([
   'help',
   'json',
   'is-public',
+  'logged-only',
   'only-assigned-to-me',
   'or',
   'ndjson',
@@ -32,8 +33,19 @@ const BOOLEAN_FLAGS = new Set([
   'token-stdin',
   'verbose',
   'version',
+  'wait',
   'yes',
 ]);
+
+// These two flags take any separated value and reject invalid ones later (see flagBooleanStrict).
+const STRICT_SEPARATED_BOOLEANS = new Set(['is-public', 'only-assigned-to-me']);
+const BOOLEAN_WORD = /^\s*(true|false|1|0|yes|no|on|off)\s*$/i;
+
+function parseBooleanWord(value) {
+  const match = BOOLEAN_WORD.exec(String(value));
+  if (!match) return undefined;
+  return ['true', '1', 'yes', 'on'].includes(match[1].toLowerCase());
+}
 
 export function parseFlagArgs(argv, { aliases = DEFAULT_ALIASES } = {}) {
   const flags = Object.create(null);
@@ -61,9 +73,18 @@ export function parseFlagArgs(argv, { aliases = DEFAULT_ALIASES } = {}) {
       continue;
     }
     if (token.startsWith('--no-') && token.length > 5) {
-      const name = token.slice(5);
-      addFlag(name, false);
-      addFlag(`no-${name}`, true);
+      const raw = token.slice(5);
+      const equalsIndex = raw.indexOf('=');
+      if (equalsIndex === -1) {
+        addFlag(raw, false);
+        addFlag(`no-${raw}`, true);
+        continue;
+      }
+      // --no-retry=true means no retries; --no-retry=false means retries.
+      const negated = parseBooleanWord(raw.slice(equalsIndex + 1));
+      if (negated === undefined) throw new CliError(`Invalid ${token}. Expected true or false.`, { exitCode: 2 });
+      addFlag(raw.slice(0, equalsIndex), !negated);
+      addFlag(`no-${raw.slice(0, equalsIndex)}`, negated);
       continue;
     }
     if (token.startsWith('--') && token.length > 2) {
@@ -82,19 +103,26 @@ export function parseFlagArgs(argv, { aliases = DEFAULT_ALIASES } = {}) {
         } else {
           throw new CliError(`Missing value for --${name}.`, { exitCode: 2 });
         }
-      } else {
-        if (['is-public', 'only-assigned-to-me'].includes(name) && next !== undefined && (!next.startsWith('-') || next === '-')) {
-          addFlag(name, next);
-          i += 1;
-        } else addFlag(name, true);
-      }
+      } else if (STRICT_SEPARATED_BOOLEANS.has(name) && next !== undefined && (!next.startsWith('-') || next === '-')) {
+        addFlag(name, next);
+        i += 1;
+      } else if (next !== undefined && parseBooleanWord(next) !== undefined) {
+        // A separated true/false word belongs to the flag, so --yes false does not confirm anything.
+        addFlag(name, next);
+        i += 1;
+      } else addFlag(name, true);
       continue;
     }
     if (/^-[A-Za-z]+$/.test(token) && token !== '-') {
-      const shorts = token.slice(1).split('');
-      for (const short of shorts) {
-        addFlag(aliases.get(short) || short, true);
+      const names = token.slice(1).split('').map((short) => aliases.get(short) || short);
+      const next = argv[i + 1];
+      // A single short boolean flag takes a separated true/false word too, as in -y false.
+      if (names.length === 1 && BOOLEAN_FLAGS.has(names[0]) && next !== undefined && parseBooleanWord(next) !== undefined) {
+        addFlag(names[0], next);
+        i += 1;
+        continue;
       }
+      for (const name of names) addFlag(name, true);
       continue;
     }
     positionals.push(token);
