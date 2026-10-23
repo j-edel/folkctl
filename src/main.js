@@ -59,6 +59,8 @@ const CREDIT_COLUMNS = ['feature', 'scope', 'used', 'limit', 'periodStart', 'per
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const DEFAULT_WAIT_INTERVAL_SECONDS = 5;
 const POLL_REQUEST_FLOOR_MS = 2000;
+const MAX_WAIT_TIMEOUT_SECONDS = 86400;
+const MAX_WAIT_INTERVAL_SECONDS = 3600;
 
 export async function main({ argv = process.argv.slice(2), env = process.env, cwd = process.cwd(), stdin = process.stdin, stdout = process.stdout, stderr = process.stderr, fetchImpl = globalThis.fetch, sleep = defaultSleep, abortAfter = (ms) => AbortSignal.timeout(ms), now = Date.now } = {}) {
   let flags = {};
@@ -731,8 +733,9 @@ async function handleEnrichmentCreate(context, ids) {
 function readWaitOptions(flags) {
   if (!flagBoolean(flags, 'wait')) return undefined;
   return {
-    timeoutMs: secondsFlag(flags, 'wait-timeout', DEFAULT_WAIT_TIMEOUT_SECONDS, 0) * 1000,
-    intervalMs: secondsFlag(flags, 'wait-interval', DEFAULT_WAIT_INTERVAL_SECONDS, 1) * 1000,
+    // The caps keep every sleep and abort delay within Node's timer range, which silently turns a longer delay into 1ms.
+    timeoutMs: secondsFlag(flags, 'wait-timeout', DEFAULT_WAIT_TIMEOUT_SECONDS, { maximum: MAX_WAIT_TIMEOUT_SECONDS }) * 1000,
+    intervalMs: secondsFlag(flags, 'wait-interval', DEFAULT_WAIT_INTERVAL_SECONDS, { minimum: 1, maximum: MAX_WAIT_INTERVAL_SECONDS }) * 1000,
   };
 }
 
@@ -794,7 +797,8 @@ async function waitForEnrichment(context, initial, { timeoutMs, intervalMs }) {
     const delay = Math.min(Math.max(intervalMs, delayForPolicies(meta?.rateLimit?.policies), parseRetryAfter(meta?.retryAfter) ?? 0), remaining);
     await context.sleep(delay);
     // Abort a status check that stalls once the deadline passes, giving a check made at the deadline time to answer.
-    const budget = Math.max(timeoutMs - elapsed(), POLL_REQUEST_FLOOR_MS);
+    // AbortSignal.timeout needs a whole number of milliseconds; fractional --wait-timeout values are allowed.
+    const budget = Math.ceil(Math.max(timeoutMs - elapsed(), POLL_REQUEST_FLOOR_MS));
     try {
       current = await requestEndpoint(poll, 'enrichments.get', { params: { enrichmentId }, signal: context.abortAfter(budget) });
       lastFailure = undefined;
@@ -916,11 +920,12 @@ function requireValue(value, message) {
 }
 
 // minimum 0 means any positive number; otherwise the value must be at least minimum seconds.
-function secondsFlag(flags, name, fallback, minimum) {
+// Without a minimum, any positive number of seconds up to the maximum is valid.
+function secondsFlag(flags, name, fallback, { minimum, maximum }) {
   if (!hasFlag(flags, name)) return fallback;
   const value = Number(flagString(flags, name));
-  const valid = Number.isFinite(value) && (minimum > 0 ? value >= minimum : value > 0);
-  if (!valid) throw new CliError(`Invalid --${name}. Expected ${minimum > 0 ? `at least ${minimum} second` : 'a positive number of seconds'}.`, { exitCode: 2 });
+  const valid = Number.isFinite(value) && (minimum ? value >= minimum : value > 0) && value <= maximum;
+  if (!valid) throw new CliError(`Invalid --${name}. Expected ${minimum ? `${minimum} to ${maximum}` : `more than 0 and at most ${maximum}`} seconds.`, { exitCode: 2 });
   return value;
 }
 

@@ -264,7 +264,8 @@ create asks for confirmation unless --yes or --dry-run is passed. Check credits 
 Folk rejects a request with 402 when the workspace lacks credits for its maximum cost; nothing is charged.
 
 IDs come from arguments, repeated --id, or --data '{"ids":[...],"fields":[...]}'. Duplicates are sent once.
---wait polls until the enrichment is completed or failed (--wait-interval 5, --wait-timeout 600 seconds).
+--wait polls until the enrichment is completed or failed: --wait-interval 5 (1 to 3600) and --wait-timeout 600
+(at most 86400) seconds, fractions allowed.
 A waited enrichment that does not end completed exits with code 5. Rate-limited or failed status checks are
 retried at the next poll, and a check still unanswered at --wait-timeout is abandoned. Without --wait, poll with enrichments get, or subscribe a
 webhook to person_enrichment.finished.

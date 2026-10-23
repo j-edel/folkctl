@@ -190,6 +190,30 @@ test('a status check that stops answering is abandoned at the wait deadline', { 
   assert.match(result.stderr, new RegExp(`Timed out after 10s waiting for enrichment ${ID}; it was pending at the last successful check\\. The last check failed: Network error calling folk API: The operation was aborted due to timeout`));
 });
 
+test('wait flags accept fractions of a second and stay within Node timer limits', async () => {
+  // The real AbortSignal.timeout rejects a fractional delay, so this run fails if the budget is not rounded.
+  const fractional = await run(['enrichments', 'get', ID, '--wait', '--wait-timeout', '5.5555', '--wait-interval', '1'], { fetchImpl: lifecycle(enrichment('pending'), completed) });
+  assert.equal(fractional.code, 0, fractional.stderr);
+  assert.equal(fractional.calls.length, 2);
+  const budgets = [];
+  await run(['enrichments', 'get', ID, '--wait', '--wait-timeout', '5.5555', '--wait-interval', '1'], {
+    abortAfter: (ms) => { budgets.push(ms); return new AbortController().signal; },
+    fetchImpl: lifecycle(enrichment('pending'), completed),
+  });
+  assert.deepEqual(budgets, [4556]);
+  for (const [flags, message] of [
+    [['--wait-timeout', '86401'], /Invalid --wait-timeout\. Expected more than 0 and at most 86400 seconds\./],
+    [['--wait-interval', '3601'], /Invalid --wait-interval\. Expected 1 to 3600 seconds\./],
+    [['--wait-timeout', '1e12'], /Invalid --wait-timeout/],
+  ]) {
+    const invalid = await run(['enrichments', 'get', ID, '--wait', ...flags], { fetchImpl: lifecycle(enrichment('pending')) });
+    assert.equal(invalid.code, 2, flags.join(' '));
+    assert.match(invalid.stderr, message);
+    assert.equal(invalid.calls.length, 0);
+  }
+  await preview(['enrichments', 'get', ID, '--wait', '--wait-timeout', '86400', '--wait-interval', '3600']);
+});
+
 test('a waited enrichment must end completed, with a status and an ID', async () => {
   const unknown = await run(['enrichments', 'get', ID, '--wait'], { fetchImpl: lifecycle(enrichment('pending'), enrichment('cancelled')) });
   assert.equal(unknown.code, 5);
