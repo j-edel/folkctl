@@ -3,7 +3,7 @@ name: folk-cli
 description: Use folkctl to inspect and update folk.app CRM data through its REST API. Covers people, companies, groups, members, custom fields, deals, custom objects, batch create/update/delete, users, notes, tasks, interactions, person enrichments, credits, legacy reminders, webhooks, and official MCP setup.
 version: 0.3.0
 license: MIT-0
-metadata: {"openclaw":{"requires":{"env":["FOLK_API_KEY"],"bins":["node","folkctl"]},"install":[{"kind":"node","package":"github:j-edel/folkctl#a1ab4674bd21f46b87d1cf97e97cfb9d28f6e48a","bins":["folkctl"]}],"primaryEnv":"FOLK_API_KEY","envVars":[{"name":"FOLK_API_KEY","required":true,"description":"folk API key used as an Authorization Bearer token."},{"name":"FOLK_API_VERSION","required":false,"description":"Optional folk API version date for X-API-Version."},{"name":"FOLK_API_BASE_URL","required":false,"description":"Optional API base URL override. Defaults to https://api.folk.app."}],"emoji":"👥","homepage":"https://github.com/j-edel/folkctl"}}
+metadata: {"openclaw":{"requires":{"env":["FOLK_API_KEY"],"bins":["node","folkctl"]},"install":[{"kind":"node","package":"github:j-edel/folkctl#cd36a2843f961600a8eecbe6fdc9df79ee7e6b0a","bins":["folkctl"]}],"primaryEnv":"FOLK_API_KEY","envVars":[{"name":"FOLK_API_KEY","required":true,"description":"folk API key used as an Authorization Bearer token."},{"name":"FOLK_API_VERSION","required":false,"description":"Optional folk API version date for X-API-Version."},{"name":"FOLK_API_BASE_URL","required":false,"description":"Optional API base URL override. Defaults to https://api.folk.app."}],"emoji":"👥","homepage":"https://github.com/j-edel/folkctl"}}
 ---
 
 # folk CLI skill
@@ -215,7 +215,7 @@ If the API returns 401/403, tell the user to verify or rotate `FOLK_API_KEY`. Do
 Skill 0.3.0 targets CLI 0.3.0. If `folkctl` is missing, install the immutable CLI source used in [v0.3.0](https://github.com/j-edel/folkctl/releases/tag/v0.3.0), which adds batch commands, enrichments, credits, and idempotent retries:
 
 ```bash
-npm install -g --ignore-scripts github:j-edel/folkctl#a1ab4674bd21f46b87d1cf97e97cfb9d28f6e48a
+npm install -g --ignore-scripts github:j-edel/folkctl#cd36a2843f961600a8eecbe6fdc9df79ee7e6b0a
 folkctl --version
 ```
 
