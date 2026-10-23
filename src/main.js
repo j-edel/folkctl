@@ -14,7 +14,7 @@ import { buildQuery, queryForSearch } from './query.js';
 import { authHelp, apiHelp, creditsHelp, dealsHelp, enrichmentsHelp, groupsHelp, interactionsHelp, mcpHelp, resourceHelp, topHelp, usersHelp, VERSION } from './help.js';
 import { mcpConfig, MCP_INFO } from './mcp.js';
 import { writeOutput } from './output.js';
-import { redact, splitList } from './util.js';
+import { redact, splitList, stripTrailingSlash } from './util.js';
 
 // Folk accepted the request, but some batch records, or a waited enrichment, did not succeed.
 export const PARTIAL_FAILURE_EXIT_CODE = 5;
@@ -58,8 +58,9 @@ const ENRICHMENT_ITEM_COLUMNS = ['id', 'status', 'enrichedFields', 'missingInput
 const CREDIT_COLUMNS = ['feature', 'scope', 'used', 'limit', 'periodStart', 'periodEnd'];
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const DEFAULT_WAIT_INTERVAL_SECONDS = 5;
+const POLL_REQUEST_FLOOR_MS = 2000;
 
-export async function main({ argv = process.argv.slice(2), env = process.env, cwd = process.cwd(), stdin = process.stdin, stdout = process.stdout, stderr = process.stderr, fetchImpl = globalThis.fetch, sleep = defaultSleep } = {}) {
+export async function main({ argv = process.argv.slice(2), env = process.env, cwd = process.cwd(), stdin = process.stdin, stdout = process.stdout, stderr = process.stderr, fetchImpl = globalThis.fetch, sleep = defaultSleep, abortAfter = (ms) => AbortSignal.timeout(ms) } = {}) {
   let flags = {};
   try {
     const parsed = parseFlagArgs(argv);
@@ -80,7 +81,7 @@ export async function main({ argv = process.argv.slice(2), env = process.env, cw
       return 0;
     }
 
-    const context = { command, flags, positionals, env, cwd, stdin, stdout, stderr, fetchImpl, sleep, warnings: new Set() };
+    const context = { command, flags, positionals, env, cwd, stdin, stdout, stderr, fetchImpl, sleep, abortAfter, warnings: new Set() };
     if (command === 'auth') return await handleAuth(context);
     if (command === 'api' || command === 'docs') return await handleApi(context);
     if (command === 'mcp') return handleMcp(context);
@@ -268,16 +269,24 @@ async function guardRawRequest(context, method, path, body) {
 // a name such as "Projects / Deals" from splitting a path segment.
 function routePathnames(baseUrl, path) {
   let pathname;
+  let basePath;
   try {
     pathname = buildUrl(baseUrl, path).pathname;
+    basePath = new URL(`${stripTrailingSlash(baseUrl)}/`).pathname;
   } catch {
     return [String(path)];
   }
-  const variants = [pathname];
-  try {
-    variants.push(decodeURIComponent(pathname));
-  } catch {
-    // Malformed percent-encoding: match the encoded form only.
+  const encoded = [pathname];
+  // With a base URL that has a path, such as a proxy at https://host/folk, routes start after that path.
+  if (basePath !== '/' && pathname.toLowerCase().startsWith(basePath.toLowerCase())) encoded.push(pathname.slice(basePath.length - 1));
+  const variants = [];
+  for (const variant of encoded) {
+    variants.push(variant);
+    try {
+      variants.push(decodeURIComponent(variant));
+    } catch {
+      // Malformed percent-encoding: match the encoded form only.
+    }
   }
   return [...new Set(variants.map((variant) => variant.replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1')))];
 }
@@ -784,8 +793,10 @@ async function waitForEnrichment(context, initial, { timeoutMs, intervalMs }) {
     const delay = Math.min(Math.max(intervalMs, delayForPolicies(meta?.rateLimit?.policies), parseRetryAfter(meta?.retryAfter) ?? 0), remaining);
     await context.sleep(delay);
     slept += delay;
+    // Abort a status check that stalls once the deadline passes, giving a check made at the deadline time to answer.
+    const budget = Math.max(timeoutMs - Math.max(Date.now() - started, slept), POLL_REQUEST_FLOOR_MS);
     try {
-      current = await requestEndpoint(poll, 'enrichments.get', { params: { enrichmentId } });
+      current = await requestEndpoint(poll, 'enrichments.get', { params: { enrichmentId }, signal: context.abortAfter(budget) });
       lastFailure = undefined;
     } catch (error) {
       if (isTransientFailure(error)) {
@@ -848,12 +859,12 @@ function handleMcp(context) {
   throw new CliError(`Unknown mcp action: ${action}\n\n${mcpHelp()}`, { exitCode: 2 });
 }
 
-async function requestEndpoint(context, key, { params = {}, query, body } = {}) {
+async function requestEndpoint(context, key, { params = {}, query, body, signal } = {}) {
   const endpoint = requireEndpoint(key);
   const path = fillPath(endpoint.path, params);
   let result;
   try {
-    result = await requestFolk({ method: endpoint.method, path, query, body, config: context.config, flags: context.flags, fetchImpl: context.fetchImpl, paginate: endpoint.paginated, sleep: context.sleep });
+    result = await requestFolk({ method: endpoint.method, path, query, body, config: context.config, flags: context.flags, fetchImpl: context.fetchImpl, paginate: endpoint.paginated, sleep: context.sleep, signal });
   } catch (error) {
     // A deprecated endpoint can fail because Folk removed it, so keep its notice next to the error.
     if (endpoint.deprecation) warn(context, endpoint.deprecation);

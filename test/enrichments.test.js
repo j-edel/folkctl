@@ -171,6 +171,25 @@ test('rate-limited or temporarily failing status checks are retried by the wait,
   assert.match(recovers.stderr, /completed \(emails\)/);
 });
 
+// If the signal never reached fetch, the stalled status check would hang this test: fail it quickly instead.
+test('a status check that stops answering is abandoned at the wait deadline', { timeout: 5000 }, async () => {
+  const budgets = [];
+  const result = await run(['people', 'enrich', 'per_1', '--fields', 'emails', '--yes', '--wait', '--wait-timeout', '10'], {
+    // Stand-in for AbortSignal.timeout: record the budget and report the timeout at once.
+    abortAfter: (ms) => { budgets.push(ms); return AbortSignal.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError')); },
+    fetchImpl: async (url, init) => {
+      if (init.method === 'POST') return Response.json({ data: enrichment('pending') }, { status: 202 });
+      if (init.signal?.aborted) throw init.signal.reason;
+      return new Promise(() => {});
+    },
+  });
+  assert.equal(result.code, 1);
+  // Each check gets the time left before the deadline, and at least 2 seconds.
+  assert.deepEqual(budgets, [5000, 2000]);
+  assert.deepEqual(result.sleeps, [5000, 5000]);
+  assert.match(result.stderr, new RegExp(`Timed out after 10s waiting for enrichment ${ID}; it was pending at the last successful check\\. The last check failed: Network error calling folk API: The operation was aborted due to timeout`));
+});
+
 test('a waited enrichment must end completed, with a status and an ID', async () => {
   const unknown = await run(['enrichments', 'get', ID, '--wait'], { fetchImpl: lifecycle(enrichment('pending'), enrichment('cancelled')) });
   assert.equal(unknown.code, 5);

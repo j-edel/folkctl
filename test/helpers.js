@@ -4,7 +4,7 @@ import { Readable, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { main } from '../src/main.js';
 
-export async function run(argv, { fetchImpl, env = {}, stdin, retries = false } = {}) {
+export async function run(argv, { fetchImpl, env = {}, stdin, retries = false, abortAfter } = {}) {
   let stdout = '';
   let stderr = '';
   const calls = [];
@@ -17,6 +17,7 @@ export async function run(argv, { fetchImpl, env = {}, stdin, retries = false } 
     stdout: new Writable({ write(chunk, _encoding, cb) { stdout += chunk; cb(); } }),
     stderr: new Writable({ write(chunk, _encoding, cb) { stderr += chunk; cb(); } }),
     sleep: async (ms) => { sleeps.push(ms); },
+    ...(abortAfter ? { abortAfter } : {}),
     fetchImpl: async (url, init) => {
       calls.push({ url: new URL(url), ...init, body: init?.body === undefined ? undefined : JSON.parse(init.body) });
       assert.ok(fetchImpl, 'Unexpected network request');

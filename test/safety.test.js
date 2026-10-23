@@ -39,6 +39,18 @@ test('api request applies the wrapper confirmations to every spelling of a guard
     assert.equal(allowed.code, 0, `${argv.join(' ')}: ${allowed.stderr}`);
     assert.equal(allowed.calls.length, 1);
   }
+  // A base URL with a path, as a proxy may use, still matches the catalog after that path.
+  for (const [argv, refusal] of [
+    [['api', 'request', 'POST', '/v1/person-enrichments', '--data', enrichment], /Refusing to spend enrichment credits/],
+    [['api', 'request', 'POST', 'https://proxy.example/folk/v1/companies/batch/update', '--data', '{"records":[{"id":"com_1","groups":[]}]}'], /Refusing to replace the groups/],
+    [['api', 'request', 'PATCH', '/v1/groups/grp_1/custom-fields/person/Stage', '--data', '{"removeOptions":["gpco_1"]}'], /Refusing to delete options/],
+    [['api', 'request', 'POST', '/v1/people/batch/delete', '--data', '{"records":[{"id":"per_1"}]}'], /Refusing to delete/],
+  ]) {
+    const proxied = await run([...argv, '--base-url', 'https://proxy.example/folk/'], { fetchImpl: ok });
+    assert.equal(proxied.code, 3, `${argv.join(' ')}: ${proxied.stderr}`);
+    assert.match(proxied.stderr, refusal);
+    assert.equal(proxied.calls.length, 0);
+  }
   const single = await run(['api', 'request', 'PATCH', '/v1/people/per_1', '--data', '{"groups":[]}', '--json'], { fetchImpl: async () => Response.json({ data: {} }) });
   assert.equal(single.code, 0);
   assert.match(single.stderr, /Warning: groups replaces the groups of this record/);

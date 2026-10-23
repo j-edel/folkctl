@@ -77,6 +77,7 @@ export async function requestFolk({
   fetchImpl = globalThis.fetch,
   paginate = false,
   sleep = defaultSleep,
+  signal,
 } = {}) {
   if (!path) throw new CliError('Internal error: request path is required.', { exitCode: 2 });
   if (!config?.apiKey && !flagBoolean(flags, 'dry-run')) {
@@ -105,13 +106,13 @@ export async function requestFolk({
     throw new CliError('No fetch implementation found. Use Node.js 20+ or provide a fetch polyfill.', { exitCode: 2 });
   }
 
-  const send = { fetchImpl, policy, sleep, idempotencyKey };
+  const send = { fetchImpl, policy, sleep, idempotencyKey, signal };
   if (paginate && flagBoolean(flags, 'all')) {
     return requestAllPages({ ...send, method: normalizedMethod, baseUrl: config.baseUrl, firstUrl: url, headers, requestBody, request });
   }
 
   const response = await fetchWithRetry(send, url, { method: normalizedMethod, headers, body: requestBody });
-  const payload = await parseResponse(response);
+  const payload = await readPayload(response, idempotencyKey);
   if (!response.ok) throw apiErrorFromResponse(response, payload, idempotencyKey);
   return {
     request,
@@ -155,7 +156,7 @@ export function retryPolicy(method, flags = {}, { keyed = false } = {}) {
   };
 }
 
-async function requestAllPages({ fetchImpl, policy, sleep, idempotencyKey, method, baseUrl, firstUrl, headers, requestBody, request }) {
+async function requestAllPages({ fetchImpl, policy, sleep, idempotencyKey, signal, method, baseUrl, firstUrl, headers, requestBody, request }) {
   const items = [];
   const pages = [];
   const deprecations = new Set();
@@ -168,8 +169,8 @@ async function requestAllPages({ fetchImpl, policy, sleep, idempotencyKey, metho
       const wait = throttleDelayMs(lastResponse.headers);
       if (wait) await sleep(wait);
     }
-    const response = await fetchWithRetry({ fetchImpl, policy, sleep, idempotencyKey }, url, { method, headers, body: requestBody });
-    const payload = await parseResponse(response);
+    const response = await fetchWithRetry({ fetchImpl, policy, sleep, idempotencyKey, signal }, url, { method, headers, body: requestBody });
+    const payload = await readPayload(response, idempotencyKey);
     lastResponse = response;
     lastPayload = payload;
     if (!response.ok) throw apiErrorFromResponse(response, payload, idempotencyKey);
@@ -207,11 +208,11 @@ async function requestAllPages({ fetchImpl, policy, sleep, idempotencyKey, metho
   };
 }
 
-async function fetchWithRetry({ fetchImpl, policy, sleep, idempotencyKey }, url, init) {
+async function fetchWithRetry({ fetchImpl, policy, sleep, idempotencyKey, signal }, url, init) {
   for (let attempt = 0; ; attempt += 1) {
     let response;
     try {
-      response = await fetchImpl(url, init);
+      response = await fetchImpl(url, signal ? { ...init, signal } : init);
     } catch (error) {
       if (attempt >= policy.retries || !policy.retryNetworkError) throw networkError(error, idempotencyKey);
       await sleep(backoffMs(attempt));
@@ -308,6 +309,15 @@ export function delayForPolicies(policies) {
     if (policy.remaining === 0) wait = Math.max(wait, Math.max(policy.resetSeconds ?? 1, 1) * 1000);
   }
   return Math.min(wait, MAX_WAIT_MS);
+}
+
+// A body that stops arriving, or a request aborted by its signal while reading, is a network error.
+async function readPayload(response, idempotencyKey) {
+  try {
+    return await parseResponse(response);
+  } catch (error) {
+    throw networkError(error, idempotencyKey);
+  }
 }
 
 async function parseResponse(response) {

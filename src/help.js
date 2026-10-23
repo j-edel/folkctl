@@ -266,7 +266,7 @@ Folk rejects a request with 402 when the workspace lacks credits for its maximum
 IDs come from arguments, repeated --id, or --data '{"ids":[...],"fields":[...]}'. Duplicates are sent once.
 --wait polls until the enrichment is completed or failed (--wait-interval 5, --wait-timeout 600 seconds).
 A waited enrichment that does not end completed exits with code 5. Rate-limited or failed status checks are
-retried at the next poll, never past --wait-timeout. Without --wait, poll with enrichments get, or subscribe a
+retried at the next poll, and a check still unanswered at --wait-timeout is abandoned. Without --wait, poll with enrichments get, or subscribe a
 webhook to person_enrichment.finished.
 
 Per-person status: enriched, partially_enriched, not_enriched, skipped (unknown, deleted, or not editable),
