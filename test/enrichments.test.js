@@ -119,23 +119,69 @@ test('a waited enrichment that fails exits 5, and a timeout explains how to resu
   }
 });
 
-test('a failed status check after starting an enrichment points to it instead of inviting a paid re-run', async () => {
-  const pollFails = async (url, init) => (init.method === 'POST'
+// Answers the create with 202 and every status check with the given status code.
+function createThenChecksFail(status, headers = {}) {
+  return async (url, init) => (init.method === 'POST'
     ? Response.json({ data: enrichment('pending') }, { status: 202 })
-    : Response.json({ error: { code: 'SERVICE_UNAVAILABLE', message: 'The service is currently unavailable.' } }, { status: 503 }));
-  const result = await run(['people', 'enrich', 'per_1', '--fields', 'emails', '--yes', '--wait', '--quiet', '--json'], { fetchImpl: pollFails });
+    : Response.json({ error: { code: `HTTP_${status}`, message: `status ${status}` } }, { status, headers }));
+}
+
+test('a status check that fails for good after starting an enrichment points to it instead of inviting a paid re-run', async () => {
+  const result = await run(['people', 'enrich', 'per_1', '--fields', 'emails', '--yes', '--wait', '--quiet', '--json'], { fetchImpl: createThenChecksFail(404) });
   assert.equal(result.code, 1);
   assert.equal(result.stdout, '');
   assert.equal(result.calls.length, 2);
   const postKey = result.calls[0].headers['Idempotency-Key'];
   assert.match(result.stderr, new RegExp(`Enrichment ${ID} started, but checking its status failed\\.`));
-  assert.match(result.stderr, /folk API 503 SERVICE_UNAVAILABLE/);
+  assert.match(result.stderr, /folk API 404 HTTP_404/);
   assert.match(result.stderr, new RegExp(`Resume with: folkctl enrichments get ${ID} --wait`));
   assert.ok(result.stderr.includes(`idempotencyKey=${postKey}`));
   const get = await run(['enrichments', 'get', ID, '--wait'], { fetchImpl: async (url, init, call) => (call === 1 ? Response.json({ data: enrichment('pending') }) : new Response('{}', { status: 404 })) });
   assert.equal(get.code, 1);
   assert.match(get.stderr, new RegExp(`Checking enrichment ${ID} failed\\.`));
   assert.doesNotMatch(get.stderr, /idempotencyKey=/);
+});
+
+test('rate-limited or temporarily failing status checks are retried by the wait, never past its deadline', async () => {
+  // Status checks send no retries of their own, even with a minute-long Retry-After.
+  const limited = await run(['people', 'enrich', 'per_1', '--fields', 'emails', '--yes', '--wait', '--wait-timeout', '20'], {
+    retries: true, fetchImpl: createThenChecksFail(429, { 'Retry-After': '60', RateLimit: '"default";r=0;t=60' }),
+  });
+  assert.equal(limited.code, 1);
+  assert.deepEqual(limited.sleeps, [5000, 15000]);
+  assert.equal(limited.sleeps.reduce((total, ms) => total + ms, 0), 20000);
+  assert.deepEqual(limited.calls.map(call => call.method), ['POST', 'GET', 'GET']);
+  assert.match(limited.stderr, new RegExp(`Timed out after 20s waiting for enrichment ${ID}; it was pending at the last successful check\\. The last check failed: folk API 429 HTTP_429`));
+  assert.match(limited.stderr, new RegExp(`Resume with: folkctl enrichments get ${ID} --wait`));
+  assert.ok(limited.stderr.includes(`idempotencyKey=${limited.calls[0].headers['Idempotency-Key']}`));
+
+  // A check that fails once is retried at the next poll, waiting for Retry-After, and the wait goes on.
+  const recovers = await run(['enrichments', 'get', ID, '--wait'], {
+    retries: true,
+    fetchImpl: async (url, init, call) => {
+      if (call === 1) return Response.json({ data: enrichment('pending') });
+      if (call === 2) return Response.json({ error: { code: 'TOO_MANY_REQUESTS', message: 'Slow down' } }, { status: 429, headers: { 'Retry-After': '12' } });
+      if (call === 3) throw new TypeError('fetch failed');
+      return Response.json({ data: completed });
+    },
+  });
+  assert.equal(recovers.code, 0, recovers.stderr);
+  assert.equal(recovers.calls.length, 4);
+  assert.deepEqual(recovers.sleeps, [5000, 12000, 5000]);
+  assert.match(recovers.stderr, /completed \(emails\)/);
+});
+
+test('a waited enrichment must end completed, with a status and an ID', async () => {
+  const unknown = await run(['enrichments', 'get', ID, '--wait'], { fetchImpl: lifecycle(enrichment('pending'), enrichment('cancelled')) });
+  assert.equal(unknown.code, 5);
+  assert.match(unknown.stderr, new RegExp(`Enrichment ${ID} status: cancelled\\.`));
+  const noStatus = await run(['enrichments', 'get', ID, '--wait'], { fetchImpl: lifecycle(enrichment('pending'), { id: ID }) });
+  assert.equal(noStatus.code, 1);
+  assert.match(noStatus.stderr, /it has no status\. Resume with/);
+  const noId = await run(['people', 'enrich', 'per_1', '--fields', 'emails', '--yes', '--wait'], { fetchImpl: async () => Response.json({ data: { status: 'pending' } }, { status: 202 }) });
+  assert.equal(noId.code, 1);
+  assert.match(noId.stderr, /Cannot wait: the enrichment response has no data\.id/);
+  assert.ok(noId.stderr.includes(`idempotencyKey=${noId.calls[0].headers['Idempotency-Key']}`));
 });
 
 test('enrichment lists filter by status, and gets read one enrichment', async () => {
@@ -202,6 +248,12 @@ test('for endpoints with a bundled notice, Folk\'s own notice wins, and the bund
     fetchImpl: async (url, init, call) => Response.json({ data: { items: [{ id: `rmd_${call}` }], pagination: { nextLink: call === 1 ? 'https://api.folk.app/v1/reminders?cursor=2' : undefined } }, deprecations: ['Use the Tasks endpoints.'] }),
   });
   assert.equal(pages.stderr, 'Warning: Use the Tasks endpoints.\n');
+  // --all keeps a notice that only an earlier page carried.
+  const firstPageOnly = await run(['users', 'list', '--all', '--json'], {
+    fetchImpl: async (url, init, call) => Response.json({ data: { items: [{ id: `usr_${call}` }], pagination: { nextLink: call === 1 ? 'https://api.folk.app/v1/users?cursor=2' : undefined } }, ...(call === 1 ? { deprecations: ['Page one notice.'] } : {}) }),
+  });
+  assert.equal(firstPageOnly.stderr, 'Warning: Page one notice.\n');
+  assert.deepEqual(JSON.parse(firstPageOnly.stdout).data.deprecations, ['Page one notice.']);
 });
 
 test('company payloads use documented fields, and webhooks accept the enrichment event', async () => {

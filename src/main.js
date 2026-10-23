@@ -8,8 +8,8 @@ import {
 } from './body.js';
 import { getEffectiveConfig, writeConfig, removeConfigToken } from './config.js';
 import { ENDPOINTS, findEndpoint, fillPath, listEndpoints } from './endpoints.js';
-import { CliError, errorToExitCode, formatError } from './errors.js';
-import { buildUrl, defaultSleep, delayForPolicies, requestFolk } from './http.js';
+import { CliError, FolkApiError, errorToExitCode, formatError } from './errors.js';
+import { buildUrl, defaultSleep, delayForPolicies, parseRetryAfter, requestFolk } from './http.js';
 import { buildQuery, queryForSearch } from './query.js';
 import { authHelp, apiHelp, creditsHelp, dealsHelp, enrichmentsHelp, groupsHelp, interactionsHelp, mcpHelp, resourceHelp, topHelp, usersHelp, VERSION } from './help.js';
 import { mcpConfig, MCP_INFO } from './mcp.js';
@@ -439,9 +439,12 @@ function writeBatchResult(context, result, label) {
     return 0;
   }
   const results = result.data?.data?.results;
-  if (!Array.isArray(results)) {
+  const sent = result.request?.body?.records?.length;
+  // Results map to records by position, so a missing result leaves every record's outcome uncertain.
+  if (!Array.isArray(results) || results.length !== sent) {
+    const problem = Array.isArray(results) ? `${results.length} results for ${sent} records` : 'data.results is missing';
     // The batch may have been applied, so keep the key that lets a re-run replay instead of repeat it.
-    throw new CliError(`Unexpected ${label} response: data.results is missing, so each record's outcome is unknown. Check the records before re-running, and re-run with the same --idempotency-key. Use --verbose to see the response.`, {
+    throw new CliError(`Unexpected ${label} response: ${problem}, so each record's outcome is unknown. Check the records before re-running, and re-run with the same --idempotency-key. Use --verbose to see the response.`, {
       idempotencyKey: result.request?.headers?.['Idempotency-Key'],
       details: result.data,
     });
@@ -731,39 +734,64 @@ async function finishEnrichment(context, initial, wait) {
   const enrichment = result.data?.data;
   const summary = enrichmentSummary(enrichment);
   if (summary && !flagBoolean(context.flags, 'quiet')) context.stderr.write(`${summary}\n`);
-  return wait && enrichment?.status === 'failed' ? PARTIAL_FAILURE_EXIT_CODE : 0;
+  // Only a completed enrichment is a success; failed, or any status this release does not know, is not.
+  return wait && enrichment?.status !== 'completed' ? PARTIAL_FAILURE_EXIT_CODE : 0;
 }
 
 function isPendingEnrichment(status) {
   return status === 'pending' || status === 'in_progress';
 }
 
+const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+function isTransientFailure(error) {
+  return error?.network === true || (error instanceof FolkApiError && TRANSIENT_STATUSES.has(error.status));
+}
+
 // Polls until the enrichment leaves pending/in_progress. Any other status, including a future one, ends the wait.
+// Status checks do not retry on their own: a rate-limited or failed check is retried at the next poll, so the
+// wait never runs past --wait-timeout.
 async function waitForEnrichment(context, initial, { timeoutMs, intervalMs }) {
   if (initial.dryRun) return initial;
-  const enrichmentId = initial.data?.data?.id;
-  if (!enrichmentId) throw new CliError('Cannot wait: the enrichment response has no data.id.');
-  const resume = `Resume with: folkctl enrichments get ${enrichmentId} --wait`;
   const created = initial.request?.method === 'POST';
+  // After a create, the key lets a re-run of the same command replay it instead of starting a second enrichment.
+  const idempotencyKey = created ? initial.request?.headers?.['Idempotency-Key'] : undefined;
+  const enrichmentId = initial.data?.data?.id;
+  if (!enrichmentId) throw new CliError('Cannot wait: the enrichment response has no data.id. Use --verbose to see it.', { idempotencyKey, details: initial.data });
+  const resume = `Resume with: folkctl enrichments get ${enrichmentId} --wait`;
+  const poll = { ...context, flags: { ...context.flags, 'no-retry': true } };
   const started = Date.now();
   let slept = 0;
   let current = initial;
+  let lastFailure;
   let lastStatus;
-  while (isPendingEnrichment(current.data?.data?.status)) {
-    const status = current.data.data.status;
+  for (;;) {
+    const status = current.data?.data?.status;
+    if (typeof status !== 'string') {
+      throw new CliError(`Unexpected response for enrichment ${enrichmentId}: it has no status. ${resume}`, { idempotencyKey, details: current.data });
+    }
+    if (!isPendingEnrichment(status)) return current;
     if (status !== lastStatus) warn(context, `Waiting for enrichment ${enrichmentId} (${status})…`, { prefix: '' });
     lastStatus = status;
     const remaining = timeoutMs - Math.max(Date.now() - started, slept);
     if (remaining <= 0) {
-      throw new CliError(`Timed out after ${Math.round(timeoutMs / 1000)}s waiting for enrichment ${enrichmentId}; it is still ${status}. ${resume}`, { exitCode: 1 });
+      const state = lastFailure ? `it was ${status} at the last successful check. The last check failed: ${formatError(lastFailure).split('\n')[0]}` : `it is still ${status}.`;
+      throw new CliError(`Timed out after ${Math.round(timeoutMs / 1000)}s waiting for enrichment ${enrichmentId}; ${state} ${resume}`, { exitCode: 1, idempotencyKey });
     }
-    // Never sleep past the deadline, so a timeout shorter than the interval still gets one poll.
-    const delay = Math.min(Math.max(intervalMs, delayForPolicies(current.response?.rateLimit?.policies)), remaining);
+    // Wait for the interval, an exhausted rate limit window, or Retry-After, but never past the deadline, so a
+    // timeout shorter than the interval still gets one poll.
+    const meta = lastFailure?.response ?? current.response;
+    const delay = Math.min(Math.max(intervalMs, delayForPolicies(meta?.rateLimit?.policies), parseRetryAfter(meta?.retryAfter) ?? 0), remaining);
     await context.sleep(delay);
     slept += delay;
     try {
-      current = await requestEndpoint(context, 'enrichments.get', { params: { enrichmentId } });
+      current = await requestEndpoint(poll, 'enrichments.get', { params: { enrichmentId } });
+      lastFailure = undefined;
     } catch (error) {
+      if (isTransientFailure(error)) {
+        lastFailure = error;
+        continue;
+      }
       // The enrichment already started. Point to it, so a re-run does not start (and pay for) a second one.
       const lead = created
         ? `Enrichment ${enrichmentId} started, but checking its status failed. Re-running the create command without --idempotency-key would start a second enrichment.`
@@ -771,11 +799,10 @@ async function waitForEnrichment(context, initial, { timeoutMs, intervalMs }) {
       throw new CliError(`${lead}\n${formatError(error, { verbose: flagBoolean(context.flags, 'verbose') })}\n${resume}`, {
         exitCode: errorToExitCode(error),
         cause: error,
-        idempotencyKey: created ? initial.request?.headers?.['Idempotency-Key'] : undefined,
+        idempotencyKey,
       });
     }
   }
-  return current;
 }
 
 function enrichmentSummary(enrichment) {

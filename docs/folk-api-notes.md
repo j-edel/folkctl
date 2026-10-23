@@ -58,7 +58,7 @@ The schema also marks many operations `x-stability-level: alpha`, including long
 - The shared `customFieldValues` description says each group ID in it "must also be provided in the `groups` field". On update that would force sending `groups`, which replaces them. Folk's own batch update examples set `customFieldValues` without `groups`, and its MCP docs state the rule for create only, so the CLI treats it as a create rule: on update, set the custom fields of groups a record is already in without sending `groups`.
 - Company batch create matches existing companies by name, like single create. Object batch create never matches existing objects, so a retried batch creates duplicates unless it reuses the idempotency key. People and companies on objects are given by ID and must already be in the group; on object updates, `people` and `companies` replace the lists.
 - An object type that does not exist in the group fails a batch with `404`, listing the group's object types. If the API key cannot access the group, the batch succeeds and every record fails with `FORBIDDEN`.
-- The CLI exits with code 5 when any record fails, prints `<resource> batch <action>: N records, N succeeded, N failed` on stderr, and adds a `batch` summary to JSON output.
+- The CLI exits with code 5 when any record fails, prints `<resource> batch <action>: N records, N succeeded, N failed` on stderr, and adds a `batch` summary to JSON output. A response without exactly one result per record exits with code 1 and the idempotency key, because results map to records only by position.
 
 ## Person enrichments and credits
 

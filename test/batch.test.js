@@ -29,6 +29,12 @@ test('batch create reads a JSON array, a records object, NDJSON, or one object, 
   const ndjson = await run(['companies', 'batch', 'create', '--data', '-', '--dry-run', '--json'], { stdin: stdinText('{"name":"Acme"}\n\n{"name":"Globex","urls":["https://globex.example"]}\n') });
   assert.equal(ndjson.code, 0, ndjson.stderr);
   assert.deepEqual(JSON.parse(ndjson.stdout).request.body.records.map(record => record.name), ['Acme', 'Globex']);
+  // Files exported with a byte-order mark parse too, as JSON and as NDJSON.
+  for (const text of ['﻿{"name":"Acme"}\n{"name":"Globex"}\n', '﻿[{"name":"Acme"},{"name":"Globex"}]']) {
+    const bom = await run(['companies', 'batch', 'create', '--data', '-', '--dry-run', '--json'], { stdin: stdinText(text) });
+    assert.equal(bom.code, 0, bom.stderr);
+    assert.equal(JSON.parse(bom.stdout).request.body.records.length, 2);
+  }
 
   const dir = await mkdtemp(join(tmpdir(), 'folkctl-batch-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
@@ -95,7 +101,8 @@ test('batch input limits fail before any request', async () => {
 });
 
 test('batch deletes and group replacements need confirmation; other batch writes do not', async () => {
-  const ok = batchResponse([{ status: 'succeeded', data: { id: 'per_1' } }]);
+  // One succeeded result per record sent, as Folk answers.
+  const ok = async (url, init) => Response.json({ data: { results: JSON.parse(init.body).records.map(record => ({ status: 'succeeded', data: { id: record.id ?? 'new_1' } })) } });
   for (const [argv, refusal] of [
     [['people', 'batch', 'delete', 'per_1'], /Refusing to delete 1 person without confirmation/],
     [['companies', 'batch', 'delete', 'com_1', 'com_2'], /Refusing to delete 2 companies without confirmation/],
@@ -172,6 +179,14 @@ test('batch results keep request order, summarize on stderr, and exit 5 when a r
   assert.match(malformed.stderr, /data\.results is missing, so each record's outcome is unknown/);
   assert.ok(malformed.stderr.includes(`idempotencyKey=${malformed.calls[0].headers['Idempotency-Key']}`));
   assert.match(malformed.stderr, /"items": \[\]/);
+  // Results map to records by position, so a short (or long) results array leaves every outcome uncertain.
+  for (const results of [[{ status: 'succeeded', data: { id: 'per_1' } }], [{ status: 'succeeded' }, { status: 'succeeded' }, { status: 'succeeded' }]]) {
+    const mismatch = await run(['people', 'batch', 'update', 'per_1', 'per_2', '--job-title', 'CEO'], { fetchImpl: batchResponse(results) });
+    assert.equal(mismatch.code, 1);
+    assert.equal(mismatch.stdout, '');
+    assert.match(mismatch.stderr, new RegExp(`${results.length} results for 2 records, so each record's outcome is unknown`));
+    assert.ok(mismatch.stderr.includes(`idempotencyKey=${mismatch.calls[0].headers['Idempotency-Key']}`));
+  }
 });
 
 test('object batches carry the group and URL-encoded object type in every form', async () => {

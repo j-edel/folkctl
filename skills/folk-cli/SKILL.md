@@ -19,7 +19,7 @@ The CLI command is `folkctl`. It is designed for OpenClaw-style agent use:
 - `--all` to follow pagination
 - `--no-input` to fail instead of prompting
 - `--yes` or `--force` only when the user has explicitly confirmed the deletion, group replacement, or credit spending it skips
-- Exit code `5`: Folk accepted a batch, but at least one record failed (or a waited enrichment failed). Read each result's `status`.
+- Exit code `5`: Folk accepted a batch, but at least one record failed (or a waited enrichment did not complete). Read each result's `status`.
 
 Every write sends an `Idempotency-Key`, and retries reuse it, so a retried write runs once. If a write ends with a network error, its outcome is unknown: re-run the same command with `--idempotency-key <the idempotencyKey from the error>` instead of a plain re-run, which could create duplicates.
 

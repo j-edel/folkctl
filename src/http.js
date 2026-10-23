@@ -158,6 +158,7 @@ export function retryPolicy(method, flags = {}, { keyed = false } = {}) {
 async function requestAllPages({ fetchImpl, policy, sleep, idempotencyKey, method, baseUrl, firstUrl, headers, requestBody, request }) {
   const items = [];
   const pages = [];
+  const deprecations = new Set();
   let url = firstUrl;
   let lastResponse;
   let lastPayload;
@@ -176,6 +177,7 @@ async function requestAllPages({ fetchImpl, policy, sleep, idempotencyKey, metho
 
     const pageItems = payload?.data?.items;
     if (Array.isArray(pageItems)) items.push(...pageItems);
+    if (Array.isArray(payload?.deprecations)) for (const message of payload.deprecations) deprecations.add(message);
 
     const nextLink = payload?.data?.pagination?.nextLink;
     if (nextLink) {
@@ -194,6 +196,8 @@ async function requestAllPages({ fetchImpl, policy, sleep, idempotencyKey, metho
     mergedPayload.data.pageCount = pages.length;
     mergedPayload.data.itemCount = items.length;
   }
+  // Keep every page's deprecation notices, not only the last page's.
+  if (deprecations.size && mergedPayload && typeof mergedPayload === 'object') mergedPayload.deprecations = [...deprecations];
 
   return {
     request: { ...request, paginated: true },
@@ -224,7 +228,9 @@ function networkError(error, idempotencyKey) {
   const hint = idempotencyKey
     ? ' The write may or may not have run. To retry it without running it twice, re-run the same command with --idempotency-key within 24 hours.'
     : '';
-  return new CliError(`Network error calling folk API: ${detail}.${hint}`, { exitCode: 1, cause: error, idempotencyKey });
+  const failure = new CliError(`Network error calling folk API: ${detail}.${hint}`, { exitCode: 1, cause: error, idempotencyKey });
+  failure.network = true;
+  return failure;
 }
 
 async function discardBody(response) {
@@ -236,14 +242,17 @@ async function discardBody(response) {
 }
 
 function retryDelayMs(response, attempt) {
-  const retryAfter = response.headers?.get?.('retry-after');
-  if (retryAfter) {
-    const seconds = Number.parseFloat(retryAfter);
-    if (Number.isFinite(seconds)) return Math.max(0, Math.min(seconds * 1000, MAX_WAIT_MS));
-    const date = Date.parse(retryAfter);
-    if (Number.isFinite(date)) return Math.max(0, Math.min(date - Date.now(), MAX_WAIT_MS));
-  }
-  return backoffMs(attempt);
+  return parseRetryAfter(response.headers?.get?.('retry-after')) ?? backoffMs(attempt);
+}
+
+// Retry-After is either seconds or an HTTP date. Returns milliseconds, capped at the one-minute window.
+export function parseRetryAfter(value) {
+  if (!value) return undefined;
+  const seconds = Number.parseFloat(value);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.min(seconds * 1000, MAX_WAIT_MS));
+  const date = Date.parse(value);
+  if (Number.isFinite(date)) return Math.max(0, Math.min(date - Date.now(), MAX_WAIT_MS));
+  return undefined;
 }
 
 // Exponential backoff with jitter, as Folk recommends, so parallel clients do not retry in step.
@@ -336,6 +345,7 @@ function responseMeta(response) {
     requestId: header('x-request-id'),
     deprecation: header('deprecation'),
     sunset: header('sunset'),
+    retryAfter: header('retry-after'),
     ...(header('idempotent-replayed') === 'true' ? { idempotentReplayed: true } : {}),
     rateLimit: {
       limit: header('x-ratelimit-limit'),

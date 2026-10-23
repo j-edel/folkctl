@@ -13,9 +13,11 @@ export async function readStdinText(stdin) {
 }
 
 async function readInputText(source, stdin) {
-  if (source === '-') return readStdinText(stdin);
-  if (source.startsWith('@')) return fs.readFile(source.slice(1), 'utf8');
-  return source;
+  let text = source;
+  if (source === '-') text = await readStdinText(stdin);
+  else if (source.startsWith('@')) text = await fs.readFile(source.slice(1), 'utf8');
+  // Editors and spreadsheet exports often start files with a byte-order mark, which JSON.parse rejects.
+  return String(text).replace(/^﻿/, '');
 }
 
 function dataSource(flags) {
