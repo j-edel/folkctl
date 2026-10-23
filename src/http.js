@@ -111,8 +111,7 @@ export async function requestFolk({
     return requestAllPages({ ...send, method: normalizedMethod, baseUrl: config.baseUrl, firstUrl: url, headers, requestBody, request });
   }
 
-  const response = await fetchWithRetry(send, url, { method: normalizedMethod, headers, body: requestBody });
-  const payload = await readPayload(response, idempotencyKey);
+  const { response, payload } = await fetchWithRetry(send, url, { method: normalizedMethod, headers, body: requestBody });
   if (!response.ok) throw apiErrorFromResponse(response, payload, idempotencyKey);
   return {
     request,
@@ -169,8 +168,7 @@ async function requestAllPages({ fetchImpl, policy, sleep, idempotencyKey, signa
       const wait = throttleDelayMs(lastResponse.headers);
       if (wait) await sleep(wait);
     }
-    const response = await fetchWithRetry({ fetchImpl, policy, sleep, idempotencyKey, signal }, url, { method, headers, body: requestBody });
-    const payload = await readPayload(response, idempotencyKey);
+    const { response, payload } = await fetchWithRetry({ fetchImpl, policy, sleep, idempotencyKey, signal }, url, { method, headers, body: requestBody });
     lastResponse = response;
     lastPayload = payload;
     if (!response.ok) throw apiErrorFromResponse(response, payload, idempotencyKey);
@@ -208,19 +206,23 @@ async function requestAllPages({ fetchImpl, policy, sleep, idempotencyKey, signa
   };
 }
 
+// Returns the final response with its parsed body. The body is read inside the loop, because a connection
+// that drops while the body arrives leaves the outcome as uncertain as any other network error.
 async function fetchWithRetry({ fetchImpl, policy, sleep, idempotencyKey, signal }, url, init) {
   for (let attempt = 0; ; attempt += 1) {
     let response;
     try {
       response = await fetchImpl(url, signal ? { ...init, signal } : init);
+      if (attempt < policy.retries && policy.retryStatus(response.status)) {
+        await discardBody(response);
+        await sleep(retryDelayMs(response, attempt));
+        continue;
+      }
+      return { response, payload: await parseResponse(response) };
     } catch (error) {
       if (attempt >= policy.retries || !policy.retryNetworkError) throw networkError(error, idempotencyKey);
       await sleep(backoffMs(attempt));
-      continue;
     }
-    if (attempt >= policy.retries || !policy.retryStatus(response.status)) return response;
-    await discardBody(response);
-    await sleep(retryDelayMs(response, attempt));
   }
 }
 
@@ -309,15 +311,6 @@ export function delayForPolicies(policies) {
     if (policy.remaining === 0) wait = Math.max(wait, Math.max(policy.resetSeconds ?? 1, 1) * 1000);
   }
   return Math.min(wait, MAX_WAIT_MS);
-}
-
-// A body that stops arriving, or a request aborted by its signal while reading, is a network error.
-async function readPayload(response, idempotencyKey) {
-  try {
-    return await parseResponse(response);
-  } catch (error) {
-    throw networkError(error, idempotencyKey);
-  }
 }
 
 async function parseResponse(response) {

@@ -104,7 +104,7 @@ Authorization header is sent.
 | Write with an idempotency key | 429, 409, 502, 503, 504, network errors |
 | Write with `--no-idempotency-key` | 429; with explicit `--retries`, also 500, 502, 503, 504, and network errors |
 
-A write is not retried on 500, because Folk stores that response for the key. A 429 is always safe to retry: Folk rejects rate-limited requests before running them. Delays follow `Retry-After`, capped at 60 seconds, and otherwise use exponential backoff with jitter. When a write fails without a definite answer, the error includes `idempotencyKey=<key>` so the same command can be re-run with `--idempotency-key` within 24 hours.
+A connection that drops while the response body arrives counts as a network error. A write is not retried on 500, because Folk stores that response for the key. A 429 is always safe to retry: Folk rejects rate-limited requests before running them. Delays follow `Retry-After`, capped at 60 seconds, and otherwise use exponential backoff with jitter. When a write fails without a definite answer, the error includes `idempotencyKey=<key>` so the same command can be re-run with `--idempotency-key` within 24 hours.
 
 ## Body construction
 

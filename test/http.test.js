@@ -145,6 +145,39 @@ test('keyed writes retry 409/502/503/504 but not a stored 500, while reads retry
   assert.equal(disabled.calls.length, 1);
 });
 
+test('a connection that drops while the body arrives is retried like any network error', async () => {
+  // Headers arrive, then the body stream breaks partway through.
+  const truncated = () => new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"data":'));
+      controller.error(new TypeError('terminated'));
+    },
+  }), { headers: { 'content-type': 'application/json' } });
+  const flaky = () => {
+    const calls = [];
+    return {
+      calls,
+      fetchImpl: async (url, init) => { calls.push(init); return calls.length === 1 ? truncated() : Response.json({ data: { id: 'per_1' } }); },
+    };
+  };
+  const read = flaky();
+  const readResult = await requestFolk({ method: 'GET', path: '/v1/people/per_1', config: CONFIG, fetchImpl: read.fetchImpl, sleep: async () => {} });
+  assert.equal(read.calls.length, 2);
+  assert.equal(readResult.data.data.id, 'per_1');
+  const keyed = flaky();
+  await requestFolk({ method: 'POST', path: '/v1/people', body: { firstName: 'Ada' }, config: CONFIG, fetchImpl: keyed.fetchImpl, sleep: async () => {} });
+  assert.equal(keyed.calls.length, 2);
+  assert.equal(keyed.calls[0].headers['Idempotency-Key'], keyed.calls[1].headers['Idempotency-Key']);
+  for (const flags of [{ 'idempotency-key': false, 'no-idempotency-key': true }, { 'no-retry': true }]) {
+    const once = flaky();
+    const error = await requestFolk({ method: flags['no-retry'] ? 'GET' : 'POST', path: '/v1/people', body: flags['no-retry'] ? undefined : {}, config: CONFIG, flags, fetchImpl: once.fetchImpl, sleep: async () => {} }).catch(caught => caught);
+    assert.equal(once.calls.length, 1, JSON.stringify(flags));
+    assert.ok(error instanceof CliError);
+    assert.equal(error.network, true);
+    assert.match(error.message, /Network error calling folk API: terminated/);
+  }
+});
+
 test('a write that keeps failing at the network level reports its key for a safe re-run', async () => {
   const run = scripted([new TypeError('fetch failed', { cause: new Error('ECONNRESET') })]);
   const error = await requestFolk({ method: 'POST', path: '/v1/people', body: {}, config: CONFIG, flags: { 'idempotency-key': 'retry-me-1' }, fetchImpl: run.fetchImpl, sleep: run.sleep }).catch(caught => caught);
