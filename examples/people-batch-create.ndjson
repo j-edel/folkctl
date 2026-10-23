@@ -1,0 +1,3 @@
+{"firstName":"Ada","lastName":"Lovelace","emails":["ada@example.com"],"customFieldValues":{"grp_123":{"Status":"Lead"}}}
+{"firstName":"Grace","lastName":"Hopper","jobTitle":"Rear Admiral","emails":["grace@example.com"]}
+{"firstName":"Katherine","lastName":"Johnson","urls":["https://www.linkedin.com/in/katherine-johnson-example"]}

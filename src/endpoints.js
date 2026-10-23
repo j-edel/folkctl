@@ -1,5 +1,12 @@
 export const DOCS_BASE = 'https://developer.folk.app/api-reference';
+export const BATCH_MAX_RECORDS = 100;
+export const ENRICHMENT_MAX_PEOPLE = 500;
 export const REMINDERS_DEPRECATION = 'Reminders are deprecated. Use tasks instead; Folk lists February 13, 2027 as the sunset date.';
+export const INTERACTION_HISTORY_DEPRECATION = 'This route is deprecated. Use interactions.list (GET /v1/interactions with timeframe); Folk lists March 29, 2027 as the removal date. folkctl interactions past and upcoming already use the new route.';
+
+const REMINDERS = { deprecated: true, deprecation: REMINDERS_DEPRECATION, sunset: '2027-02-13', replacement: 'tasks' };
+const INTERACTION_HISTORY = { deprecated: true, deprecation: INTERACTION_HISTORY_DEPRECATION, sunset: '2027-03-29', replacement: 'interactions.list' };
+const BATCH = { batch: true, maxRecords: BATCH_MAX_RECORDS };
 
 export const ENDPOINTS = [
   endpoint('people.list', 'GET', '/v1/people', 'List people', 'people/list-people', { paginated: true, filters: true }),
@@ -7,24 +14,37 @@ export const ENDPOINTS = [
   endpoint('people.get', 'GET', '/v1/people/{personId}', 'Get a person', 'people/get-a-person'),
   endpoint('people.update', 'PATCH', '/v1/people/{personId}', 'Update a person', 'people/update-a-person'),
   endpoint('people.delete', 'DELETE', '/v1/people/{personId}', 'Delete a person', 'people/delete-a-person', { destructive: true }),
+  endpoint('people.batch.create', 'POST', '/v1/people/batch/create', 'Create up to 100 people', 'people/create-people-in-batch', BATCH),
+  endpoint('people.batch.update', 'POST', '/v1/people/batch/update', 'Update up to 100 people', 'people/update-people-in-batch', BATCH),
+  endpoint('people.batch.delete', 'POST', '/v1/people/batch/delete', 'Delete up to 100 people', 'people/delete-people-in-batch', { ...BATCH, destructive: true }),
 
   endpoint('companies.list', 'GET', '/v1/companies', 'List companies', 'companies/list-companies', { paginated: true, filters: true }),
   endpoint('companies.create', 'POST', '/v1/companies', 'Create a company', 'companies/create-a-company'),
   endpoint('companies.get', 'GET', '/v1/companies/{companyId}', 'Get a company', 'companies/get-a-company'),
   endpoint('companies.update', 'PATCH', '/v1/companies/{companyId}', 'Update a company', 'companies/update-a-company'),
   endpoint('companies.delete', 'DELETE', '/v1/companies/{companyId}', 'Delete a company', 'companies/delete-a-company', { destructive: true }),
+  endpoint('companies.batch.create', 'POST', '/v1/companies/batch/create', 'Create or update up to 100 companies by name', 'companies/create-companies-in-batch', BATCH),
+  endpoint('companies.batch.update', 'POST', '/v1/companies/batch/update', 'Update up to 100 companies', 'companies/update-companies-in-batch', BATCH),
+  endpoint('companies.batch.delete', 'POST', '/v1/companies/batch/delete', 'Delete up to 100 companies', 'companies/delete-companies-in-batch', { ...BATCH, destructive: true }),
 
-  endpoint('deals.list', 'GET', '/v1/groups/{groupId}/{objectType}', 'List deals', 'deals/list-deals', { paginated: true, filters: true }),
-  endpoint('deals.create', 'POST', '/v1/groups/{groupId}/{objectType}', 'Create a deal', 'deals/create-a-deal'),
-  endpoint('deals.get', 'GET', '/v1/groups/{groupId}/{objectType}/{dealId}', 'Get a deal', 'deals/get-a-deal'),
-  endpoint('deals.update', 'PATCH', '/v1/groups/{groupId}/{objectType}/{dealId}', 'Update a deal', 'deals/update-a-deal'),
-  endpoint('deals.delete', 'DELETE', '/v1/groups/{groupId}/{objectType}/{dealId}', 'Delete a deal', 'deals/delete-a-deal', { destructive: true }),
+  // Deals are custom objects whose object type is Deals. Both command families share these routes.
+  endpoint('deals.list', 'GET', '/v1/groups/{groupId}/{objectType}', 'List deals', 'custom-objects/list-objects', { paginated: true, filters: true }),
+  endpoint('deals.create', 'POST', '/v1/groups/{groupId}/{objectType}', 'Create a deal', 'custom-objects/create-an-object'),
+  endpoint('deals.get', 'GET', '/v1/groups/{groupId}/{objectType}/{dealId}', 'Get a deal', 'custom-objects/get-an-object'),
+  endpoint('deals.update', 'PATCH', '/v1/groups/{groupId}/{objectType}/{dealId}', 'Update a deal', 'custom-objects/update-an-object'),
+  endpoint('deals.delete', 'DELETE', '/v1/groups/{groupId}/{objectType}/{dealId}', 'Delete a deal', 'custom-objects/delete-an-object', { destructive: true }),
+  endpoint('deals.batch.create', 'POST', '/v1/groups/{groupId}/{objectType}/batch/create', 'Create up to 100 deals', 'custom-objects/create-objects-in-batch', BATCH),
+  endpoint('deals.batch.update', 'POST', '/v1/groups/{groupId}/{objectType}/batch/update', 'Update up to 100 deals', 'custom-objects/update-objects-in-batch', BATCH),
+  endpoint('deals.batch.delete', 'POST', '/v1/groups/{groupId}/{objectType}/batch/delete', 'Delete up to 100 deals', 'custom-objects/delete-objects-in-batch', { ...BATCH, destructive: true }),
 
   endpoint('objects.list', 'GET', '/v1/groups/{groupId}/{objectType}', 'List custom objects', 'custom-objects/list-objects', { paginated: true, filters: true }),
   endpoint('objects.create', 'POST', '/v1/groups/{groupId}/{objectType}', 'Create a custom object', 'custom-objects/create-an-object'),
   endpoint('objects.get', 'GET', '/v1/groups/{groupId}/{objectType}/{objectId}', 'Get a custom object', 'custom-objects/get-an-object'),
   endpoint('objects.update', 'PATCH', '/v1/groups/{groupId}/{objectType}/{objectId}', 'Update a custom object', 'custom-objects/update-an-object'),
   endpoint('objects.delete', 'DELETE', '/v1/groups/{groupId}/{objectType}/{objectId}', 'Delete a custom object', 'custom-objects/delete-an-object', { destructive: true }),
+  endpoint('objects.batch.create', 'POST', '/v1/groups/{groupId}/{objectType}/batch/create', 'Create up to 100 custom objects', 'custom-objects/create-objects-in-batch', BATCH),
+  endpoint('objects.batch.update', 'POST', '/v1/groups/{groupId}/{objectType}/batch/update', 'Update up to 100 custom objects', 'custom-objects/update-objects-in-batch', BATCH),
+  endpoint('objects.batch.delete', 'POST', '/v1/groups/{groupId}/{objectType}/batch/delete', 'Delete up to 100 custom objects', 'custom-objects/delete-objects-in-batch', { ...BATCH, destructive: true }),
 
   endpoint('groups.list', 'GET', '/v1/groups', 'List groups', 'groups/list-groups', { paginated: true }),
   endpoint('groups.create', 'POST', '/v1/groups', 'Create a group', 'groups/create-a-group'),
@@ -63,9 +83,16 @@ export const ENDPOINTS = [
   endpoint('tasks.done', 'POST', '/v1/tasks/{taskId}/mark-as-done', 'Mark a task as done', 'tasks/mark-a-task-as-done'),
   endpoint('tasks.todo', 'POST', '/v1/tasks/{taskId}/mark-as-todo', 'Mark a task as to do', 'tasks/mark-a-task-as-to-do'),
 
+  endpoint('enrichments.list', 'GET', '/v1/person-enrichments', 'List enrichments of people', 'person-enrichments/list-enrichments-of-people', { paginated: true, filters: true }),
+  endpoint('enrichments.create', 'POST', '/v1/person-enrichments', 'Find emails/phones for up to 500 people (uses credits)', 'person-enrichments/enrich-people', { async: true, consumesCredits: true, maxIds: ENRICHMENT_MAX_PEOPLE }),
+  endpoint('enrichments.get', 'GET', '/v1/person-enrichments/{enrichmentId}', 'Get an enrichment of people', 'person-enrichments/get-an-enrichment-of-people'),
+
+  endpoint('credits.get', 'GET', '/v1/credits', 'Get workspace credits for each metered feature', 'credits/get-credits'),
+
+  endpoint('interactions.list', 'GET', '/v1/interactions', 'List past or upcoming interactions', 'interactions/list-interactions', { paginated: true, beta: true, requiredQuery: ['entity.id', 'timeframe'] }),
   endpoint('interactions.create', 'POST', '/v1/interactions', 'Create an interaction', 'interactions/create-an-interaction'),
-  endpoint('interactions.past', 'GET', '/v1/interactions/past', 'List past interactions', 'interactions/list-past-interactions', { paginated: true, beta: true, requiredQuery: ['entity.id'] }),
-  endpoint('interactions.upcoming', 'GET', '/v1/interactions/upcoming', 'List upcoming interactions', 'interactions/list-upcoming-interactions', { paginated: true, beta: true, requiredQuery: ['entity.id'] }),
+  endpoint('interactions.past', 'GET', '/v1/interactions/past', 'List past interactions (deprecated route)', 'interactions/list-past-interactions', { paginated: true, beta: true, requiredQuery: ['entity.id'], ...INTERACTION_HISTORY }),
+  endpoint('interactions.upcoming', 'GET', '/v1/interactions/upcoming', 'List upcoming interactions (deprecated route)', 'interactions/list-upcoming-interactions', { paginated: true, beta: true, requiredQuery: ['entity.id'], ...INTERACTION_HISTORY }),
   endpoint('interactions.get', 'GET', '/v1/interactions/{interactionId}', 'Get a past or upcoming interaction', 'interactions/get-a-past-or-upcoming-interaction', { beta: true, requiredQuery: ['entity.id'] }),
   endpoint('interactions.update', 'PATCH', '/v1/interactions/{interactionId}', 'Update a logged interaction', 'interactions/update-an-interaction', { beta: true }),
   endpoint('interactions.delete', 'DELETE', '/v1/interactions/{interactionId}', 'Delete a logged interaction', 'interactions/delete-an-interaction', { destructive: true, beta: true, requiredQuery: ['entity.id'] }),
@@ -87,7 +114,7 @@ function endpoint(key, method, path, summary, docsPath, extra = {}) {
     path,
     summary,
     docsUrl: `${DOCS_BASE}/${docsPath}`,
-    ...(resource === 'reminders' ? { deprecated: true, deprecation: REMINDERS_DEPRECATION, sunset: '2027-02-13' } : {}),
+    ...(resource === 'reminders' ? REMINDERS : {}),
     ...extra,
   };
 }

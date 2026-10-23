@@ -5,9 +5,9 @@ export function renderTable(items, { columns } = {}) {
   const selected = columns?.length ? columns : inferColumns(items);
   const rows = items.map((item) => selected.map((column) => stringifyCell(readPath(item, column))));
   const widths = selected.map((column, index) => Math.min(60, Math.max(column.length, ...rows.map((row) => row[index].length))));
-  const header = selected.map((column, index) => pad(column, widths[index])).join('  ');
+  const header = selected.map((column, index) => pad(column, widths[index])).join('  ').trimEnd();
   const rule = widths.map((width) => '-'.repeat(width)).join('  ');
-  const body = rows.map((row) => row.map((cell, index) => pad(truncate(cell, widths[index]), widths[index])).join('  '));
+  const body = rows.map((row) => row.map((cell, index) => pad(truncate(cell, widths[index]), widths[index])).join('  ').trimEnd());
   return [header, rule, ...body].join('\n');
 }
 

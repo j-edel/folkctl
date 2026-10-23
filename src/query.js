@@ -1,5 +1,6 @@
 import { CliError } from './errors.js';
 import { flagInteger, flagString, flagValues, flagBoolean, flagBooleanStrict } from './args.js';
+import { splitList } from './util.js';
 
 const OPERATOR_ALIASES = new Map([
   ['is', 'in'],
@@ -40,13 +41,30 @@ export function buildQuery(flags = {}, { resource } = {}) {
 
   const mapping = resource === 'notes'
     ? { query: 'query', 'created-after': 'createdAfter', 'created-before': 'createdBefore' }
-    : resource === 'groups' ? { visibility: 'visibility' } : {};
+    : resource === 'groups' ? { visibility: 'visibility' }
+      : resource === 'interactions' ? { timeframe: 'timeframe' } : {};
   for (const [flag, parameter] of Object.entries(mapping)) {
     const value = flagString(flags, flag);
     if (value !== undefined) query.set(parameter, value);
   }
 
+  if (resource === 'interactions') addInteractionFilters(query, flags);
+  if (resource === 'enrichments') {
+    for (const status of splitList(flagValues(flags, 'status'))) query.append('filter[status][in]', status);
+  }
+
   return query;
+}
+
+// GET /v1/interactions takes repeated importedTypes and user.id values. An empty importedTypes returns
+// logged interactions only; without it, every imported type is returned.
+function addInteractionFilters(query, flags) {
+  const importedTypes = splitList(flagValues(flags, 'imported-type').concat(flagValues(flags, 'imported-types')));
+  const loggedOnly = flagBoolean(flags, 'logged-only');
+  if (loggedOnly && importedTypes.length) throw new CliError('Use --logged-only or --imported-type, not both.', { exitCode: 2 });
+  if (loggedOnly) query.set('importedTypes', '');
+  for (const type of importedTypes) query.append('importedTypes', type);
+  for (const userId of splitList(flagValues(flags, 'user-id'))) query.append('user.id', userId);
 }
 
 export function addRawParam(query, raw) {

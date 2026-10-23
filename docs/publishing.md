@@ -1,11 +1,11 @@
 # Publishing a folkctl update
 
-Repository: [j-edel/folkctl](https://github.com/j-edel/folkctl). The CLI and bundled `folk-cli` skill share a major/minor feature release. Skill-only corrections may increment the skill's patch version independently; skill 0.2.2 targets CLI 0.2.1.
+Repository: [j-edel/folkctl](https://github.com/j-edel/folkctl). The CLI and bundled `folk-cli` skill share a major/minor feature release. Skill-only corrections may increment the skill's patch version independently; skill 0.3.0 targets CLI 0.3.0.
 
 ## Prepare and verify
 
 1. For CLI releases, update `package.json` and `package-lock.json`. For skill releases, update the `version` in `skills/folk-cli/SKILL.md` and its documented CLI target. CLI version output and the HTTP User-Agent read `package.json` automatically.
-2. Update `CHANGELOG.md`, examples, API notes, and the source-backed endpoint fixture if the API changed.
+2. Update `CHANGELOG.md`, examples, API notes, and the source-backed endpoint fixture if the API changed. Regenerate the fixture with `node scripts/openapi-snapshot.mjs > test/fixtures/folk-api-contract.json` and review its diff.
 3. Run checks and inspect the package contents:
 
 ```bash
@@ -14,6 +14,8 @@ npm run ci
 npm pack --dry-run
 node bin/folkctl.js --version
 node bin/folkctl.js tasks create --entity-id per_123 --title "Follow up" --due-at 2026-09-08 --is-public=false --dry-run --json
+node bin/folkctl.js people batch create --data @examples/people-batch-create.ndjson --dry-run --json
+node bin/folkctl.js people enrich per_123 --fields emails --dry-run --json
 node bin/folkctl.js mcp config codex
 ```
 
@@ -21,22 +23,28 @@ node bin/folkctl.js mcp config codex
 
 ## Release after review
 
-After the change is reviewed and merged, verify the final checkout and CI result before tagging. For 0.2.1:
+After the change is reviewed and merged, verify the final checkout and CI result before tagging. Then confirm that the companion skill installs this release:
 
 ```bash
-git tag v0.2.1
-git push origin v0.2.1
+node scripts/check-skill-pin.mjs
 ```
 
-Use the 0.2.1 changelog entry for GitHub release notes and attach the tested tarball. Verify the GitHub release and installation from its tag, including rejection of invalid task boolean values.
+It fails if the pinned commit installs another CLI version, if `SKILL.md` expects another version, or if `bin/`, `src/`, `package.json`, or `package-lock.json` differ between the pinned commit and `HEAD`. For 0.3.0:
 
-The public npm registry returned 404 for `folkctl` on September 6, 2026, so npm publication is an optional first publication, not an existing distribution channel. Verify the package name and maintainer account before publishing from the release checkout:
+```bash
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+Use the 0.3.0 changelog entry for GitHub release notes and attach the tested tarball. Verify the GitHub release and installation from its tag, including `folkctl --version`, a batch dry-run, and the enrichment confirmation prompt.
+
+The public npm registry still returned 404 for `folkctl` on October 22, 2026, so npm publication is an optional first publication, not an existing distribution channel. Verify the package name and maintainer account before publishing from the release checkout:
 
 ```bash
 npm publish --access public
 ```
 
-If publishing to npm, verify installation with `npm install -g folkctl@0.2.1` and `folkctl --version`. Package publication, a GitHub release, and a ClawHub skill release are separate steps; verify each destination before reporting it published.
+If publishing to npm, verify installation with `npm install -g folkctl@0.3.0` and `folkctl --version`. Package publication, a GitHub release, and a ClawHub skill release are separate steps; verify each destination before reporting it published.
 
 ## ClawHub companion skill
 
