@@ -78,7 +78,10 @@ test('a separated true/false word belongs to the boolean flag before it', async 
 
 test('--no-flag=value and --no-retries mean what they say', async () => {
   const failing = async () => Response.json({ error: { code: 'SERVICE_UNAVAILABLE', message: 'down' } }, { status: 503 });
-  for (const [flags, calls] of [[['--no-retry=true'], 1], [['--no-retries'], 1], [['--no-retry=false'], 4], [['--retries', '1'], 2]]) {
+  for (const [flags, calls] of [
+    [['--no-retry=true'], 1], [['--no-retries'], 1], [['--no-retry=false'], 4], [['--no-retries=false'], 4],
+    [['--retries', '1'], 2], [['--retries', '1', '--no-retries'], 1],
+  ]) {
     const result = await run(['users', 'me', ...flags], { fetchImpl: failing, retries: true });
     assert.equal(result.code, 1, flags.join(' '));
     assert.equal(result.calls.length, calls, flags.join(' '));
@@ -86,6 +89,12 @@ test('--no-flag=value and --no-retries mean what they say', async () => {
   const invalid = await run(['people', 'delete', 'per_1', '--no-yes=maybe']);
   assert.equal(invalid.code, 2);
   assert.match(invalid.stderr, /Invalid --no-yes=maybe/);
+  // Negating a value flag falls back to its default instead of failing.
+  const waited = await run(['enrichments', 'get', 'enr_1', '--wait', '--no-wait-timeout', '--no-wait-interval'], {
+    fetchImpl: async (url, init, call) => Response.json({ data: { id: 'enr_1', status: call === 1 ? 'pending' : 'completed', fields: ['emails'], summary: null, items: null } }),
+  });
+  assert.equal(waited.code, 0, waited.stderr);
+  assert.deepEqual(waited.sleeps, [5000]);
 });
 
 // Node's readline question never settles on end of input, so a regression would hang: fail it quickly.

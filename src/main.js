@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { parseFlagArgs, flagBoolean, flagString, flagValues, hasFlag } from './args.js';
+import { parseFlagArgs, flagBoolean, flagString, flagValue, flagValues } from './args.js';
 import {
   applyCompanyFlags, applyDealFlags, applyPersonFlags,
   buildCompanyBody, buildDealBody, buildEnrichmentBody, buildGenericBody, buildGroupBody, buildGroupFieldBody,
@@ -922,8 +922,10 @@ function requireValue(value, message) {
 // minimum 0 means any positive number; otherwise the value must be at least minimum seconds.
 // Without a minimum, any positive number of seconds up to the maximum is valid.
 function secondsFlag(flags, name, fallback, { minimum, maximum }) {
-  if (!hasFlag(flags, name)) return fallback;
-  const value = Number(flagString(flags, name));
+  // --no-wait-timeout and the like record a boolean, which means: use the default.
+  const raw = flagValue(flags, name);
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
   const valid = Number.isFinite(value) && (minimum ? value >= minimum : value > 0) && value <= maximum;
   if (!valid) throw new CliError(`Invalid --${name}. Expected ${minimum ? `${minimum} to ${maximum}` : `more than 0 and at most ${maximum}`} seconds.`, { exitCode: 2 });
   return value;

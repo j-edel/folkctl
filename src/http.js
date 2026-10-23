@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CliError, FolkApiError } from './errors.js';
-import { flagBoolean, flagInteger, flagValues, hasFlag } from './args.js';
+import { flagBoolean, flagInteger, flagValue, flagValues } from './args.js';
 import { redact, stripTrailingSlash } from './util.js';
 import { VERSION } from './version.js';
 
@@ -131,9 +131,9 @@ function assertAllowedOrigin(baseUrl, url) {
 // to retry with the same key. A 500 on a write is not retried: Folk stores it, so a retry would replay it.
 // A 429 is always retried, because Folk rejects rate-limited requests before running them.
 export function retryPolicy(method, flags = {}, { keyed = false } = {}) {
-  // --no-retries also records retries=false, which is not an explicit count.
   const disabled = flagBoolean(flags, 'no-retry') || flagBoolean(flags, 'no-retries');
-  const explicit = hasFlag(flags, 'retries') && !flagBoolean(flags, 'no-retries');
+  // --no-retries and --no-retries=false record retries as false or true, which is not a count.
+  const explicit = flagValue(flags, 'retries') !== undefined;
   let retries = DEFAULT_RETRIES;
   if (disabled) retries = 0;
   else if (explicit) {

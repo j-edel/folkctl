@@ -144,6 +144,13 @@ export function hasFlag(flags, name) {
   return Object.prototype.hasOwnProperty.call(flags, normalizeFlagName(name));
 }
 
+// A value flag's last value, ignoring the true or false that a --no-<flag> form records for it.
+export function flagValue(flags, name) {
+  const raw = getFlag(flags, name);
+  const value = Array.isArray(raw) ? raw.at(-1) : raw;
+  return typeof value === 'boolean' ? undefined : value;
+}
+
 export function flagValues(flags, name) {
   const value = getFlag(flags, name);
   if (value === undefined || value === false) return [];
