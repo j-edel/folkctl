@@ -9,6 +9,8 @@ export async function run(argv, { fetchImpl, env = {}, stdin, retries = false, a
   let stderr = '';
   const calls = [];
   const sleeps = [];
+  // A fake clock that only advances with the fake sleep, so waits are deterministic.
+  let clock = 0;
   const code = await main({
     argv: retries ? argv : [...argv, '--no-retry'],
     env: { FOLKCTL_CONFIG: fileURLToPath(new URL('./fixtures/no-config.json', import.meta.url)), FOLK_API_KEY: 'fk_test_secret', ...env },
@@ -16,7 +18,8 @@ export async function run(argv, { fetchImpl, env = {}, stdin, retries = false, a
     stdin: stdin ?? Readable.from([]),
     stdout: new Writable({ write(chunk, _encoding, cb) { stdout += chunk; cb(); } }),
     stderr: new Writable({ write(chunk, _encoding, cb) { stderr += chunk; cb(); } }),
-    sleep: async (ms) => { sleeps.push(ms); },
+    sleep: async (ms) => { sleeps.push(ms); clock += ms; },
+    now: () => clock,
     ...(abortAfter ? { abortAfter } : {}),
     fetchImpl: async (url, init) => {
       calls.push({ url: new URL(url), ...init, body: init?.body === undefined ? undefined : JSON.parse(init.body) });

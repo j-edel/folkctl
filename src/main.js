@@ -60,7 +60,7 @@ const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const DEFAULT_WAIT_INTERVAL_SECONDS = 5;
 const POLL_REQUEST_FLOOR_MS = 2000;
 
-export async function main({ argv = process.argv.slice(2), env = process.env, cwd = process.cwd(), stdin = process.stdin, stdout = process.stdout, stderr = process.stderr, fetchImpl = globalThis.fetch, sleep = defaultSleep, abortAfter = (ms) => AbortSignal.timeout(ms) } = {}) {
+export async function main({ argv = process.argv.slice(2), env = process.env, cwd = process.cwd(), stdin = process.stdin, stdout = process.stdout, stderr = process.stderr, fetchImpl = globalThis.fetch, sleep = defaultSleep, abortAfter = (ms) => AbortSignal.timeout(ms), now = Date.now } = {}) {
   let flags = {};
   try {
     const parsed = parseFlagArgs(argv);
@@ -81,7 +81,7 @@ export async function main({ argv = process.argv.slice(2), env = process.env, cw
       return 0;
     }
 
-    const context = { command, flags, positionals, env, cwd, stdin, stdout, stderr, fetchImpl, sleep, abortAfter, warnings: new Set() };
+    const context = { command, flags, positionals, env, cwd, stdin, stdout, stderr, fetchImpl, sleep, abortAfter, now, warnings: new Set() };
     if (command === 'auth') return await handleAuth(context);
     if (command === 'api' || command === 'docs') return await handleApi(context);
     if (command === 'mcp') return handleMcp(context);
@@ -769,8 +769,9 @@ async function waitForEnrichment(context, initial, { timeoutMs, intervalMs }) {
   if (!enrichmentId) throw new CliError('Cannot wait: the enrichment response has no data.id. Use --verbose to see it.', { idempotencyKey, details: initial.data });
   const resume = `Resume with: folkctl enrichments get ${enrichmentId} --wait`;
   const poll = { ...context, flags: { ...context.flags, 'no-retry': true } };
-  const started = Date.now();
-  let slept = 0;
+  // One clock for the whole wait; tests inject a clock that advances with their fake sleep.
+  const started = context.now();
+  const elapsed = () => context.now() - started;
   let current = initial;
   let lastFailure;
   let lastStatus;
@@ -782,7 +783,7 @@ async function waitForEnrichment(context, initial, { timeoutMs, intervalMs }) {
     if (!isPendingEnrichment(status)) return current;
     if (status !== lastStatus) warn(context, `Waiting for enrichment ${enrichmentId} (${status})…`, { prefix: '' });
     lastStatus = status;
-    const remaining = timeoutMs - Math.max(Date.now() - started, slept);
+    const remaining = timeoutMs - elapsed();
     if (remaining <= 0) {
       const state = lastFailure ? `it was ${status} at the last successful check. The last check failed: ${formatError(lastFailure).split('\n')[0]}` : `it is still ${status}.`;
       throw new CliError(`Timed out after ${Math.round(timeoutMs / 1000)}s waiting for enrichment ${enrichmentId}; ${state} ${resume}`, { exitCode: 1, idempotencyKey });
@@ -792,9 +793,8 @@ async function waitForEnrichment(context, initial, { timeoutMs, intervalMs }) {
     const meta = lastFailure?.response ?? current.response;
     const delay = Math.min(Math.max(intervalMs, delayForPolicies(meta?.rateLimit?.policies), parseRetryAfter(meta?.retryAfter) ?? 0), remaining);
     await context.sleep(delay);
-    slept += delay;
     // Abort a status check that stalls once the deadline passes, giving a check made at the deadline time to answer.
-    const budget = Math.max(timeoutMs - Math.max(Date.now() - started, slept), POLL_REQUEST_FLOOR_MS);
+    const budget = Math.max(timeoutMs - elapsed(), POLL_REQUEST_FLOOR_MS);
     try {
       current = await requestEndpoint(poll, 'enrichments.get', { params: { enrichmentId }, signal: context.abortAfter(budget) });
       lastFailure = undefined;
